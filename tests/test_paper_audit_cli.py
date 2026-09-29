@@ -14,12 +14,21 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from qa.paper_audit import audit_paper  # noqa: E402
+from qa.paper_audit import _pdf_pages, audit_paper  # noqa: E402
 from latex.safe_build import tree_hash  # noqa: E402
 from _common import sha256_file  # noqa: E402
 
 
 class PaperAuditCliTest(unittest.TestCase):
+    def test_pdf_page_count_includes_blank_pages(self) -> None:
+        completed = subprocess.CompletedProcess(["pdftotext"], 0, "first\f\fthird\f", "")
+        with patch("qa.paper_audit.shutil.which", return_value="pdftotext"), patch(
+            "qa.paper_audit.subprocess.run", return_value=completed,
+        ):
+            pages, error = _pdf_pages(Path("unused.pdf"))
+        self.assertIsNone(error)
+        self.assertEqual(pages, ["first", "", "third"])
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix="paper-audit-")
         self.project = Path(self.temp.name) / "中文项目"

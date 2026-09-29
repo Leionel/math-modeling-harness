@@ -53,7 +53,11 @@ def _pdf_pages(path: Path) -> tuple[list[str] | None, str | None]:
     )
     if result.returncode != 0:
         return None, f"pdftotext exited {result.returncode}: {result.stderr.strip()}"
-    return [page for page in result.stdout.split("\f") if page.strip()], None
+    text = result.stdout.rstrip("\r\n")
+    pages = text.split("\f")
+    if text.endswith("\f"):
+        pages.pop()
+    return pages, None
 
 
 def _source_binding(root: Path, tex: Path, pdf: Path | None, receipt: Path | None) -> dict[str, str]:
