@@ -25,6 +25,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
@@ -460,7 +461,8 @@ organizer's page.
 
 ROLE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "evidence_registry": ("model_contract",),
-    "frozen_results": ("model_contract",),
+    "raw_results": ("model_contract",),
+    "frozen_results": ("model_contract", "raw_results"),
     "paper_plan": ("model_contract", "frozen_results", "evidence_registry"),
     "paper": ("paper_plan", "frozen_results"),
     "abstract": ("paper_plan", "frozen_results"),
@@ -468,28 +470,46 @@ ROLE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
 }
 
 
-def refresh_dag(demo: Demo, roles: dict[str, str], *, frozen: bool = False) -> None:
+def refresh_dag(
+    demo: Demo,
+    roles: dict[str, str],
+    *,
+    frozen: bool = False,
+    producer_receipt_ids: dict[str, str] | None = None,
+) -> None:
     """Re-project the author artifacts into the canonical DAG with live digests."""
     ids_by_role = {
         role: f"ART-{role.upper().replace('_', '-')}-{index}"
         for index, role in enumerate(roles, start=1)
     }
     nodes = []
+    receipt_ids = producer_receipt_ids or {}
     for index, (role, path) in enumerate(roles.items(), start=1):
         artifact_path = demo.root / path
         artifact_id = ids_by_role[role]
-        nodes.append({
+        producer_receipt_id = receipt_ids.get(role)
+        node_data: dict[str, Any] = {
             "artifact_id": artifact_id,
-            "role": role, "path": path, "producer_id": f"producer-{role}",
+            "role": role,
+            "path": path,
+            "producer_id": f"producer-{role}",
             "dependencies": [
                 {"artifact_id": ids_by_role[dep], "relation": "consumes"}
                 for dep in ROLE_DEPENDENCIES.get(role, ()) if dep in ids_by_role
             ],
             "lifecycle": "frozen" if (frozen and role == "frozen_results") else "mutable",
-            "freshness": "current", "digest_owner": "artifact_dag",
-            "digest_algorithm": "sha256", "sha256": sha256(artifact_path),
-            "version": "1", "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+            "freshness": "current",
+            "version": "1",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if producer_receipt_id:
+            node_data["producer_receipt_id"] = producer_receipt_id
+            node_data["digest_owner"] = f"command_receipt:{producer_receipt_id}"
+        else:
+            node_data["digest_owner"] = "artifact_dag"
+            node_data["digest_algorithm"] = "sha256"
+            node_data["sha256"] = sha256(artifact_path)
+        nodes.append(node_data)
     dag = load_json(demo.root / "artifact_dag.json")
     dag["nodes"] = [node for node in dag["nodes"] if node["role"] == "competition_profile"] + nodes
     write_json(demo.root / "artifact_dag.json", dag)
@@ -591,11 +611,13 @@ def build(demo: Demo) -> dict[str, object]:
     print("P2  full run, independent recomputation, freeze")
     full = demo.harness(
         "execute", "--project", str(root), "--stage", "full", "--selected",
+        "--output-artifact", "raw_results.json",
         "--", sys.executable, "model.py", name="execute full",
     )
     full_payload = demo.expect_ok(full, "execute full")
     full_receipt = Path(str(full_payload["receipt"])).resolve()
     full_receipt_ref = full_receipt.relative_to(root.resolve()).as_posix()
+    full_receipt_id = str(full_payload.get("receipt_id") or load_json(full_receipt).get("receipt_id"))
     evaluated = demo.script(
         "validation/evaluate_obligations.py", "--project-root", str(root),
         "--model-contract", "model_contract.json", "--measurements", "validation_measurements.json",
@@ -613,7 +635,9 @@ def build(demo: Demo) -> dict[str, object]:
         "--input", "input.json", "--code", "model.py", "--validation", "full_validation.json",
         name="execute freeze",
     )
-    demo.expect_ok(freeze, "execute freeze")
+    freeze_payload = demo.expect_ok(freeze, "execute freeze")
+    freeze_receipt = Path(str(freeze_payload["receipt"])).resolve()
+    freeze_receipt_id = str(freeze_payload.get("receipt_id") or load_json(freeze_receipt).get("receipt_id"))
     registered = demo.script(
         "register_evidence.py", "--project-root", str(root),
         "--frozen-results", "frozen_results.json",
@@ -635,8 +659,12 @@ def build(demo: Demo) -> dict[str, object]:
     refresh_dag(demo, {
         "model_contract": "model_contract.json",
         "evidence_registry": "evidence_registry.json",
+        "raw_results": "raw_results.json",
         "frozen_results": "frozen_results.json",
-    }, frozen=True)
+    }, frozen=True, producer_receipt_ids={
+        "raw_results": full_receipt_id,
+        "frozen_results": freeze_receipt_id,
+    })
     p2 = demo.harness("check", "P2", "--project", str(root), "--json", name="check P2")
     demo.expect_ok(p2, "check P2")
 
@@ -648,12 +676,16 @@ def build(demo: Demo) -> dict[str, object]:
     refresh_dag(demo, {
         "model_contract": "model_contract.json",
         "evidence_registry": "evidence_registry.json",
+        "raw_results": "raw_results.json",
         "frozen_results": "frozen_results.json",
         "paper_plan": "paper_plan.json",
         "abstract": "abstract.txt",
         "paper": "paper.txt",
         "conclusion": "conclusion.txt",
-    }, frozen=True)
+    }, frozen=True, producer_receipt_ids={
+        "raw_results": full_receipt_id,
+        "frozen_results": freeze_receipt_id,
+    })
     add_checkpoint(demo, "w1", "demo-operator")
     w1 = demo.harness("check", "W1", "--project", str(root), "--json", name="check W1")
     demo.expect_ok(w1, "check W1")
@@ -752,6 +784,17 @@ def probe_freeze_needs_execution(demo: Demo) -> dict[str, object]:
         "--code", "model.py", "--validation", "full_validation.json",
         name="legacy freeze to a new path",
     )
+    if substitute.returncode != 0:
+        return {
+            "property": "a frozen result must come from a captured execution",
+            "attempt": "freeze the same numbers with only a free-text --command",
+            "held": refused.returncode != 0 and "requires --receipt" in substitute.stderr,
+            "evidence": [
+                f"in-place overwrite refused: exit={refused.returncode}",
+                f"unbacked substitute refused: exit={substitute.returncode}",
+                substitute.stderr.strip(),
+            ],
+        }
     dag = load_json(probe.root / "artifact_dag.json")
     for node in dag["nodes"]:
         if node["role"] == "frozen_results":

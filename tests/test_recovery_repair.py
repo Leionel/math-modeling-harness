@@ -26,11 +26,10 @@ class RecoveryRepairTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.fixture = built_fixture()
 
-    def test_freeze_artifact_repair_is_contract_blocked(self) -> None:
-        """F03 documents the recovery channel gap: a deleted frozen result has no
-        sanctioned repair (P2 requires exactly one successful freeze receipt, so
-        re-freezing breaks P2).  The executor must record the step instead of
-        executing it, re-check the gate honestly, and exit 1."""
+    def test_freeze_artifact_repair_succeeds_via_supersession(self) -> None:
+        """GAP-R1 closed: a deleted frozen result (F03) can be recovered through
+        freeze supersession. The executor re-runs the freeze step declaring
+        --supersedes-receipt, P2 verifies active lineage count == 1, and exits 0."""
         fault = FAULTS / "F03_frozen_results_deleted"
         with tempfile.TemporaryDirectory(prefix="repair-f03-") as temp:
             project = Path(temp) / "project"
@@ -47,20 +46,69 @@ class RecoveryRepairTest(unittest.TestCase):
                 text=True, capture_output=True, encoding="utf-8", errors="replace",
                 check=False, env=UTF8_ENV,
             )
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             payload = json.loads(result.stdout)
-            self.assertFalse(payload["ok"])
+            self.assertTrue(payload["ok"])
             frozen_step = next(step for step in payload["steps"] if step["path"] == "frozen_results.json")
-            self.assertEqual(frozen_step["status"], "contract_blocked")
-            self.assertFalse(frozen_step["executed"])
-            self.assertEqual(payload["gate_exit_code"], 1)
+            self.assertEqual(frozen_step["status"], "rerun")
+            self.assertTrue(frozen_step["executed"])
+            self.assertEqual(payload["gate_exit_code"], 0)
 
             log = json.loads((project / ".harness" / "recovery" / "F03.json").read_text(encoding="utf-8"))
-            self.assertFalse(log["repaired"])
-            self.assertTrue(any("canonical frozen_results artifact does not exist" in error
-                                for error in log["gate_report"].get("errors", [])))
-            # The artifact stays absent: no unsanctioned rewrite happened.
-            self.assertFalse((project / "frozen_results.json").exists())
+            self.assertTrue(log["repaired"])
+            self.assertEqual(log["gate_report"].get("errors"), [])
+            # The artifact is recovered and receipts are preserved.
+            self.assertTrue((project / "frozen_results.json").exists())
+            receipts = list((project / "receipts").glob("freeze-*.json"))
+            self.assertEqual(len(receipts), 2)  # Original + superseded receipt
+
+    def test_f04_receipt_binding_mismatch_repair_succeeds(self) -> None:
+        """F04 recovery E2E: command binding mismatch repaired via supersession."""
+        fault = FAULTS / "F04_receipt_binding_mismatch"
+        with tempfile.TemporaryDirectory(prefix="repair-f04-") as temp:
+            project = Path(temp) / "project"
+            shutil.copytree(self.fixture, project)
+            injected = subprocess.run(
+                [sys.executable, str(fault / "inject.py"), "--project-root", str(project)],
+                text=True, capture_output=True, encoding="utf-8", check=False,
+            )
+            self.assertEqual(injected.returncode, 0, injected.stdout + injected.stderr)
+
+            result = subprocess.run(
+                [sys.executable, str(REPAIR), "--project-root", str(project),
+                 "--fault-id", "F04", "--gate", "P2", "--changed", "frozen_results.json"],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+                check=False, env=UTF8_ENV,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["gate_exit_code"], 0)
+
+    def test_gap_r2_receipt_backed_rerun_succeeds(self) -> None:
+        """GAP-R2 closed: modifying raw_results triggers selective rerun of full
+        execution stage then freeze stage with full receipt backing, passing P2."""
+        with tempfile.TemporaryDirectory(prefix="repair-gap-r2-") as temp:
+            project = Path(temp) / "project"
+            shutil.copytree(self.fixture, project)
+            raw_path = project / "raw_results.json"
+            data = json.loads(raw_path.read_text(encoding="utf-8"))
+            data["results"][0]["value"] = 88888
+            raw_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(REPAIR), "--project-root", str(project),
+                 "--fault-id", "GAP_R2", "--gate", "P2", "--changed", "raw_results.json"],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+                check=False, env=UTF8_ENV,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["gate_exit_code"], 0)
+            executed_steps = [s["path"] for s in payload["steps"] if s.get("executed")]
+            self.assertIn("raw_results.json", executed_steps)
+            self.assertIn("frozen_results.json", executed_steps)
 
     def test_execute_argv_maps_receipt_facts_to_flags(self) -> None:
         receipt = {

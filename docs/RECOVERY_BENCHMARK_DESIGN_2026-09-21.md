@@ -88,16 +88,16 @@ PASS/FAIL 判定（单故障）：
 
 1. 输入：项目根 + 目标 gate + `--changed`（透传给 planner；或直接给 `--plan`）。planner 拒绝出计划时（如 artifact 文件已删除），从其 stdout 载荷仍取 `rerun_steps`。
 2. 步骤分类（不新增第二套读取/判定实现，状态经 `scripts/runtime/` 的 `check_gate` 取回）：
-   - `rerun`：产物有 producer receipt（经 run_index 的 `output_refs` 反查）且 stage ∈ {smoke, full}——用 `harness execute` 重放记录的 argv（重写旧项目根拼写，含 Windows 8.3 短名两种形态），每步留新 receipt；
-   - `contract_blocked`：freeze 产物，见 §6 gap——只记录、不执行；
+   - `rerun`：产物有 producer receipt（经 run_index 的 `output_refs` 反查）且 stage ∈ {smoke, full, freeze}——用 `harness execute` 重放记录的 argv（重写旧项目根拼写，含 Windows 8.3 短名两种形态），每步留新 receipt；freeze stage 带有 `--freeze` 与 `--supersedes-receipt` 声明新 generation；
+   - `contract_blocked`：无 automated rerun 通道的产物（如 review 阶段）；
    - `author_plane`：作者平面产物无 producer receipt——记录为需重做/重审。
-3. 复检目标 gate，写 `.harness/recovery/<fault_id>.json`（步骤、receipt 路径、gate 报告、repaired 判定）；`repaired` = gate PASS 且所有步骤都已执行。
-4. 修复器自身绝不改写 artifact、receipt、hash 或 verdict。
+3. 复检目标 gate，写 `.harness/recovery/<fault_id>.json`（步骤、receipt 路径、gate 报告、repaired 判定）；`repaired` = gate PASS 且目标 gate 所需的重跑步骤均已成功执行。
+4. 修复器自身绝不手写改写 artifact、receipt、hash 或 verdict。
 
 ## 6. 已知 gap（动态回写）
 
-- **GAP-R1（2026-09-18 实证）：freeze 产物无合规修复通道。** P2 硬性要求"恰好一条成功 freeze receipt"（`v2_gate_runtime._v2_gate_p2`）；经 `harness execute` 重放 freeze receipt 会产生第二条成功 freeze receipt，P2 从此永远失败（已在临时副本实证：`P2 requires exactly one successful freeze receipt`）。`harness reproduce` 只在隔离副本内比对字节、不把产物落回（重定位后的）项目。结论：F03/F04 类故障的"检测"完备，"修复"在当前契约下不可达，需要新的受控机制（如 receipt 顶替/新 run scope 迁移）才能闭合；执行端如实记 `contract_blocked`，不绕过。
-- **GAP-R2：slim fixture 的 DAG 产物均为作者平面或 freeze 产物**——smoke/full 重跑路径（`rerun` 类）当前没有可注入的 fixture 故障能走通端到端，只有 argv 映射的单元测试覆盖。补 fixture（增加 receipt-backed 的 DAG 产物）后方可端到端验证 `rerun` 通道。
+- **GAP-R1 [已闭合 2026-09-22]：freeze 产物合规修复通道。** 通过引入最小可行 receipt supersession 机制（`supersedes_receipt_id` 与自增 `generation`），历史 freeze receipt 保持不可变并继续可审计；P2 门禁校验当前状态下 active valid freeze lineage 恰好为 1 条。F03（deleted frozen results）和 F04（binding mismatch）均已走通合法 `repair.py` 恢复通道并使 P2 真实 PASS。
+- **GAP-R2 [已闭合 2026-09-22]：slim fixture 增加 receipt-backed DAG 产物。** 在 `examples/end_to_end/run_demo.py` 中为 `full` 阶段显式绑定 `raw_results.json` DAG 节点及其 producer receipt。当 upstream 数据被篡改时，`repair.py` 能端到端联动 selective rerun full execution → freeze execution → P2 PASS。
 - **GAP-R3（2026-09-18 CI 实测）：按字节固化的证据不能进版本库。** 初版把 fixture 提交在 `evaluation/recovery/fixtures/slim_v2/`，Linux CI 上 8 个 DAG artifact 全部读成 `digest_drift`（`core.autocrlf` 把 CRLF 存成 LF），且 review 证据绑死生成时的绝对路径。现改为每轮生成（§4）。**遗留事实**：v2 的 review 平面整体不可搬迁——重定位后 W2 必红，除非重跑 `harness review`；任何需要跨机比对 W2 的评测都必须先重建 review 证据。
 - F06 sensitivity、F07 implementation_map 所需产物不在 slim fixture 中——恢复矩阵以 §2 表格"可注入"列为准。
 

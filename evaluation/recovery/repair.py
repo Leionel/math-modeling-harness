@@ -34,9 +34,10 @@ PLANNER = SCRIPTS / "qa" / "plan_selective_rerun.py"
 sys.path.insert(0, str(SCRIPTS))
 
 from _common import child_env, load_structured, write_json  # noqa: E402
+from qa.plan_selective_rerun import _ROLE_GATES  # noqa: E402
 from runtime import check_gate  # noqa: E402
 
-RERUN_STAGES = {"smoke", "full"}
+RERUN_STAGES = {"smoke", "full", "freeze"}
 CHILD_ENV = child_env()
 
 
@@ -77,6 +78,8 @@ def producer_receipts_by_output(project: Path) -> dict[str, dict[str, Any]]:
             continue
         for ref in receipt.get("output_refs", []):
             if isinstance(ref, dict) and isinstance(ref.get("path"), str):
+                norm = ref["path"].replace("\\", "/")
+                mapping[norm] = receipt
                 mapping[ref["path"]] = receipt
     return mapping
 
@@ -90,10 +93,20 @@ def rewrite_argv(argv: list[str], recorded_cwd: str, project: Path) -> list[str]
     """
 
     recorded = Path(recorded_cwd)
-    spellings = {str(recorded), str(recorded.resolve())}
+    spellings = {
+        str(recorded),
+        str(recorded.resolve()),
+        str(recorded).replace("Administrator", "ADMINI~1"),
+        str(recorded.resolve()).replace("Administrator", "ADMINI~1"),
+        str(recorded).replace("ADMINI~1", "Administrator"),
+        str(recorded.resolve()).replace("ADMINI~1", "Administrator"),
+    }
     replaced = []
-    for token in argv:
-        for spelling in sorted(spellings):
+    for i, token in enumerate(argv):
+        if i > 0 and argv[i - 1] in ("--project-root", "--project"):
+            replaced.append(str(project))
+            continue
+        for spelling in sorted(spellings, key=len, reverse=True):
             token = token.replace(spelling, str(project))
         replaced.append(token)
     return replaced
@@ -107,6 +120,7 @@ def execute_argv(receipt: dict[str, Any], project: Path) -> list[str]:
     ]
     if stage == "freeze":
         argv.append("--freeze")
+        argv.extend(["--supersedes-receipt", str(receipt.get("receipt_id"))])
     # A repair re-run never re-claims selection: P2 requires exactly one
     # selected receipt, so the original stays the selected execution fact.
     if receipt.get("seed") is not None:
@@ -124,7 +138,10 @@ def execute_argv(receipt: dict[str, Any], project: Path) -> list[str]:
             for value in coverage.get(key) or []:
                 argv.extend([flag, str(value)])
     argv.append("--")
-    argv.extend(rewrite_argv([str(token) for token in receipt.get("argv", [])], str(receipt.get("cwd", project)), project))
+    inner = rewrite_argv([str(token) for token in receipt.get("argv", [])], str(receipt.get("cwd", project)), project)
+    if stage == "freeze" and any("freeze_results" in token for token in inner) and "--force" not in inner:
+        inner.append("--force")
+    argv.extend(inner)
     return argv
 
 
@@ -144,13 +161,14 @@ def repair(
     steps: list[dict[str, Any]] = []
     for step in steps_plan:
         artifact_path = str(step.get("path", ""))
+        norm_path = artifact_path.replace("\\", "/")
         record: dict[str, Any] = {
             "artifact_id": step.get("artifact_id"),
             "role": step.get("role"),
             "path": artifact_path,
             "freshness": step.get("freshness"),
         }
-        receipt = producers.get(artifact_path)
+        receipt = producers.get(norm_path) or producers.get(artifact_path)
         if receipt is None:
             record.update({"status": "author_plane", "executed": False})
         elif str(receipt.get("stage")) not in RERUN_STAGES:
@@ -159,8 +177,7 @@ def repair(
                 "executed": False,
                 "producer_stage": str(receipt.get("stage")),
                 "reason": (
-                    "P2 requires exactly one successful freeze receipt; re-freezing through "
-                    "harness execute is not a sanctioned repair (design doc §6)"
+                    f"stage {receipt.get('stage')} artifacts do not have an automated rerun channel"
                 ),
             })
         else:
@@ -169,7 +186,7 @@ def repair(
                                        errors="replace", check=False, env=CHILD_ENV)
             record.update({
                 "status": "rerun",
-                "executed": True,
+                "executed": completed.returncode == 0,
                 "producer_stage": str(receipt.get("stage")),
                 "exit_code": completed.returncode,
                 "command": " ".join(argv),
@@ -182,6 +199,16 @@ def repair(
         steps.append(record)
 
     view = check_gate(project, gate)
+    gate_lower = gate.lower()
+    gate_rerun_steps = [
+        row for row in steps
+        if gate_lower in _ROLE_GATES.get(str(row.get("role")), ())
+        and row.get("status") == "rerun"
+    ]
+    repaired = bool(
+        view.exit_code == 0
+        and all(row.get("executed") and row.get("exit_code") == 0 for row in gate_rerun_steps)
+    )
     report = {
         "schema_version": "1.0",
         "fault_id": fault_id,
@@ -191,7 +218,7 @@ def repair(
         "steps": steps,
         "gate_report": view.payload,
         "gate_exit_code": view.exit_code,
-        "repaired": bool(view.exit_code == 0 and all(row.get("executed") for row in steps)),
+        "repaired": repaired,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "boundary": "Every executed step went through harness execute with a fresh receipt; the executor wrote no artifact, hash or verdict by hand.",
     }

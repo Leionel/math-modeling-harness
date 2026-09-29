@@ -178,7 +178,7 @@ class CheckpointAndDiffTest(unittest.TestCase):
         self.assertEqual(before, project_snapshot(project), "diff must be read-only")
         changed_ids = [row["artifact_id"] for row in document["artifacts"]["content_changed"]]
         self.assertTrue(any("FROZEN" in artifact_id for artifact_id in changed_ids), changed_ids)
-        self.assertEqual(document["gates"]["changed"].get("m1"), {"a": "pass", "b": "blocked"})
+        self.assertEqual(document["gates"]["changed"].get("p2"), {"a": "pass", "b": "blocked"})
         self.assertEqual(document["a"]["fork"] if "fork" in document["a"] else None, None)
         self.assertEqual(document["b"]["fork"]["parent_checkpoint"], "ckpt-base")
 
