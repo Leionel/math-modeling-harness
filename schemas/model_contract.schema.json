@@ -369,7 +369,21 @@
         "method": {"type": "string", "minLength": 1},
         "acceptance": {"$ref": "#/$defs/validation_acceptance"},
         "required_stage": {"type": "string", "enum": ["smoke", "full", "both"]},
-        "artifact_role": {"type": "string", "enum": ["sensitivity_experiment", "oos_artifact", "failure_evidence"]}
+        "artifact_role": {"type": "string", "enum": ["sensitivity_experiment", "oos_artifact", "failure_evidence"]},
+        "claim_test": {"$ref": "#/$defs/claim_test"}
+      }
+    },
+    "claim_test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "case_role", "optimization_variable", "scope", "boundary_case", "input_case"],
+      "properties": {
+        "claim_id": {"type": "string", "minLength": 1},
+        "case_role": {"type": "string", "enum": ["supporting", "counterexample"]},
+        "optimization_variable": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "boundary_case": {"type": "string", "minLength": 1},
+        "input_case": {"type": "object", "minProperties": 1}
       }
     },
     "validation_acceptance": {

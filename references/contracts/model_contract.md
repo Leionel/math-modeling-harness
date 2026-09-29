@@ -174,6 +174,7 @@
 - 把约束写成可定位的 `constraint_id + expression + meaning`。
 - 为 smoke/full 指定可判断成败的 acceptance；“结果合理”不是验收标准。
 - 按题型声明会改变结论可信度的 `validation_obligations`；每个 `acceptance` 必须是有限的结构化比较，P2 由 measurement snapshot 独立重算，不接受空 `ok=true` 或人工 verdict 报告。
+- 对需要微型反例的高风险结论，可在两条 `validation_obligations` 中分别填写 `claim_test`：同一 `claim_id` 的 `supporting` 与 `counterexample`，各自说明优化变量、适用范围、边界情况和具体输入。合同核验要求该 claim 存在、属于同一问、使用同一优化变量、两种用例成对且输入不同；数值是否符合预期仍由各自的 `acceptance` 与 measurement snapshot 重算。`claim_test` 本身不是数学证明，也不能替代运行回执；复跑命令和实际输入必须由正式执行证据绑定，W2 独立评审判断结论措辞是否超过测试范围。
 
 ## S5 research coverage extension
 

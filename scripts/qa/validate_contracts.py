@@ -34,6 +34,36 @@ ARTIFACT_REQUIRED_BY_CATEGORY = {
 }
 
 
+def _claim_test_errors(model: Mapping[str, Any], plan: Mapping[str, Any]) -> list[str]:
+    """Check that an opt-in microcase pair belongs to one paper claim."""
+
+    errors: list[str] = []
+    claims = {row["claim_id"]: row for row in plan.get("claims", []) if isinstance(row, dict)}
+    tested: dict[str, list[dict[str, Any]]] = {}
+    for model_row in model.get("models", []):
+        for obligation in model_row.get("validation_obligations", []):
+            claim_test = obligation.get("claim_test")
+            if not isinstance(claim_test, dict):
+                continue
+            claim_id = claim_test.get("claim_id")
+            if claim_id not in claims:
+                errors.append(f"validation obligation {obligation.get('obligation_id')} tests unknown claim_id {claim_id}")
+                continue
+            if claims[claim_id].get("question_id") != model_row.get("question_id"):
+                errors.append(f"validation obligation {obligation.get('obligation_id')} tests claim {claim_id} from another question")
+            tested.setdefault(claim_id, []).append(claim_test)
+    for claim_id, rows in tested.items():
+        roles = {row.get("case_role") for row in rows}
+        if roles != {"supporting", "counterexample"}:
+            errors.append(f"claim {claim_id} requires supporting and counterexample validation obligations")
+        if len({row.get("optimization_variable") for row in rows}) != 1:
+            errors.append(f"claim {claim_id} microcases must use one optimization variable")
+        input_cases = {json.dumps(row.get("input_case"), ensure_ascii=False, sort_keys=True) for row in rows}
+        if len(input_cases) != len(rows):
+            errors.append(f"claim {claim_id} microcases must use distinct input_case values")
+    return errors
+
+
 def _type_matches(value: Any, expected: str) -> bool:
     if expected == "null":
         return value is None
@@ -518,6 +548,7 @@ def _cross_references(
     claim_ids = [row["claim_id"] for row in plan["claims"]]
     claim_set = unique("paper_plan claim_id", claim_ids)
     claim_by_id = {row["claim_id"]: row for row in plan["claims"]}
+    errors.extend(_claim_test_errors(model, plan))
     section_ids = [row["section_id"] for row in plan["sections"]]
     section_set = unique("paper_plan section_id", section_ids)
     argument_units = plan.get("argument_units", [])
