@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -44,6 +45,14 @@ def load_race_spec(spec_path: Path) -> dict[str, Any]:
         raise ValueError("Race spec requires a non-empty candidate_models list")
     if len(data["candidate_models"]) < 2:
         raise ValueError("Model racing requires at least 2 candidate models")
+    ids: set[str] = set()
+    for candidate in data["candidate_models"]:
+        cid = candidate.get("id") if isinstance(candidate, dict) else None
+        if not isinstance(cid, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", cid):
+            raise ValueError(f"invalid candidate id: {cid!r}")
+        if cid.lower() in ids:
+            raise ValueError(f"duplicate candidate id: {cid}")
+        ids.add(cid.lower())
     return data
 
 
@@ -230,6 +239,8 @@ def run_model_race(
     for cand in spec["candidate_models"]:
         cid = cand["id"]
         branch_root = branches_dir / cid
+        if branch_root.is_symlink():
+            raise ValueError(f"candidate branch must not be a symlink: {cid}")
         if branch_root.exists():
             shutil.rmtree(branch_root)
 

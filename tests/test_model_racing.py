@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -23,6 +24,28 @@ class ModelRacingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.fixture = built_fixture()
+
+    def test_cli_rejects_candidate_path_before_touching_output(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="race-path-test-") as temp:
+            temp_dir = Path(temp)
+            spec = temp_dir / "race.json"
+            spec.write_text(json.dumps({
+                "candidate_models": [{"id": "../../victim"}, {"id": "safe"}],
+            }), encoding="utf-8")
+            victim = temp_dir / "victim"
+            victim.mkdir()
+            sentinel = victim / "keep.txt"
+            sentinel.write_text("keep me", encoding="utf-8")
+            output = temp_dir / "output"
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "model_racing.py"), "--spec", str(spec),
+                 "--base-project", str(temp_dir), "--output-dir", str(output)],
+                text=True, capture_output=True, encoding="utf-8", errors="replace", check=False,
+            )
+            self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+            self.assertIn("invalid candidate id", completed.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep me")
+            self.assertFalse(output.exists())
 
     def test_model_racing_fork_and_factual_compare(self) -> None:
         with tempfile.TemporaryDirectory(prefix="race-test-") as temp:
