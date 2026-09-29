@@ -10,6 +10,8 @@
   旧报告会 stale，不能靠 `--recheck` 重新变为 current，必须重新审查。
 - 论文改动后旧 review 立即 stale（reviewed_artifacts digest 不再匹配），
   不得继续用于 W2；必须重新审查产出新报告。
+- TeX review bundle 必须记录 `source_dependencies`。旧 bundle 缺此字段时不能
+  证明 `\input` 子文件未变，按 stale 处理并重新审查。
 - 若 blocker+high 数量没有严格减少，或冻结结果/输入哈希被意外改变，操作者
   必须停止下一轮并输出 decision memo；当前 Harness 只提供证据与 Gate，不会
   自动生成或执行该 memo。

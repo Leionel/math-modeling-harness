@@ -506,6 +506,15 @@ def _source_dependency_freshness(report: Mapping[str, Any], root: Path) -> list[
     if not isinstance(manifest, Mapping):
         return ["review bundle manifest must be an object"]
     rows = manifest.get("source_dependencies", [])
+    tex_review = any(
+        isinstance(row, Mapping) and str(row.get("path", "")).lower().endswith(".tex")
+        for row in report.get("reviewed_artifacts", [])
+    ) or any(
+        isinstance(row, Mapping) and row.get("role") == "paper_source_context"
+        for row in manifest.get("files", [])
+    )
+    if tex_review and not rows:
+        return ["TeX review bundle has no source_dependencies"]
     if not isinstance(rows, list):
         return ["review source_dependencies must be an array"]
     errors: list[str] = []

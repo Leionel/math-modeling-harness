@@ -85,6 +85,15 @@ class ReviewTexSourceTest(unittest.TestCase):
                 ],
             }
             self.assertEqual(review_freshness(report, root), ("current", []))
+            legacy_bundle = dict(bundle)
+            legacy_bundle.pop("source_dependencies")
+            bundle_path.write_text(json.dumps(legacy_bundle), encoding="utf-8")
+            report["bundle_ref"]["sha256"] = sha256_file(bundle_path)
+            freshness, errors = review_freshness(report, root)
+            self.assertEqual(freshness, "stale")
+            self.assertTrue(any("no source_dependencies" in error for error in errors))
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            report["bundle_ref"]["sha256"] = sha256_file(bundle_path)
             child.write_text("\\section{结果} 更改后的结论。\n", encoding="utf-8")
             freshness, errors = review_freshness(report, root)
             self.assertEqual(freshness, "stale")
