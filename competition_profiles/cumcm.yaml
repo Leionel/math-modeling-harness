@@ -1,16 +1,18 @@
 # competition_profiles/cumcm.yaml (maintainer seed; not an official v2 snapshot)
 # 2026 全国大学生数学建模竞赛 (CUMCM) 专属画像配置
+# 正文不超过 30 页，附录不限页数：
+# https://www.mcm.edu.cn/html_cn/node/4cd596519c9eb9fbd866398f6df0caa3.html
+# 本文件仍是维护者种子；正式提交必须绑定当届官方规则快照。
 
 inherits: "_base_cumcm"
 profile_id: "cumcm-2026-electronic"
 competition_name: "2026年全国大学生数学建模竞赛"
 season: "2026"
-deadline: "2026-09-07T20:00:00+08:00"
 timezone: "Asia/Shanghai"
 
 overrides:
   rules:
-    page_limit: 25
+    page_limit: 30
     header_title: "2026年高教社杯全国大学生数学建模竞赛承诺书"
   ai_disclosure:
     policy: "required_when_used"

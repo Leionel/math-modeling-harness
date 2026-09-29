@@ -134,7 +134,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         builtin: dict[str, dict[str, Any]] = {
             "_base_cumcm.yaml": {
                 "competition_family": "cumcm", "language": "zh-CN", "default_engine": "xelatex",
-                "base_template": "cumcm-2026-electronic", "rules": {"page_limit": 25, "page_count_scope": "paper_body"},
+                "base_template": "cumcm-2026-electronic", "rules": {"page_count_scope": "paper_body"},
                 "ai_disclosure": {"policy": "required_when_used", "format": "support_material_pdf", "manual_checks": {"when_used": ["ai_generated_content_marked", "ai_tool_in_references", "ai_disclosure_in_support"], "when_not_used": ["no_ai_declaration_after_references"]}},
                 "submission": {"required_files": [{"role": "paper", "format": "pdf"}], "support_zip": {"policy": "required"}},
             },
@@ -144,7 +144,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
                 "ai_disclosure": {"policy": "required_when_used", "format": "in_paper_section", "manual_checks": {"when_used": ["ai_inline_citations", "ai_tool_in_references", "ai_report_in_paper", "ai_report_position"], "when_not_used": []}},
                 "submission": {"required_files": [{"role": "paper", "format": "pdf"}], "support_zip": {"policy": "prohibited"}},
             },
-            "cumcm.yaml": {"profile_id": "cumcm-2026-electronic", "competition_name": "2026年全国大学生数学建模竞赛", "season": "2026", "overrides": {"rules": {"page_limit": 25}}, "inherits": "_base_cumcm"},
+            "cumcm.yaml": {"profile_id": "cumcm-2026-electronic", "competition_name": "2026年全国大学生数学建模竞赛", "season": "2026", "overrides": {"rules": {"page_limit": 30}}, "inherits": "_base_cumcm"},
             "mcm_icm.yaml": {"profile_id": "mcm_icm", "competition_name": "2026 Mathematical Contest in Modeling (MCM/ICM)", "season": "2026", "overrides": {"rules": {"page_limit": 25}}, "inherits": "_base_mcm_icm"},
             "apmcm.yaml": {"profile_id": "apmcm", "competition_name": "亚太地区大学生数学建模竞赛 (APMCM)", "season": "2026", "overrides": {"language": "en-US", "rules": {"page_limit": 25}, "ai_disclosure": {"policy": "required_when_used", "format": "in_paper_section"}}, "inherits": "_base_cumcm"},
         }

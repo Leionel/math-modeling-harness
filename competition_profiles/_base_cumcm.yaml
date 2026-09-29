@@ -7,9 +7,8 @@ default_engine: "xelatex"
 base_template: "cumcm-2026-electronic"
 
 rules:
-  page_limit: 25
-  min_pages: 15
   abstract_pages: 1
+  page_count_scope: "paper_body"
   cover_page: "cumcm_header_page"
   anonymous_mode: true
   anonymous_rules:
