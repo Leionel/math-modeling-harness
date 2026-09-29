@@ -80,6 +80,16 @@ class PaperLengthAuditTest(unittest.TestCase):
         self.assertFalse(seed_report["errors"])
         self.assertTrue(seed_report["warnings"])
 
+    def test_pdf_total_does_not_trigger_body_page_limit(self) -> None:
+        report = evaluate_length_audit(
+            plan(),
+            {"status": "verified", "submission": {"max_pages": 30, "page_count_scope": "paper_body"}},
+            "[[CORE]] Mechanism and constraint explain the selected decision.",
+            page_count=42,
+        )
+        self.assertFalse(any(row["kind"] == "PAGE_LIMIT_EXCEEDED" for row in report["triage"]))
+        self.assertTrue(any("body pages separately" in warning for warning in report["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

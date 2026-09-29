@@ -18,6 +18,12 @@ flowchart LR
 
 页数必须同时记录数值和获取方法。`manual_verified` 是明确的人审边界，不应描述成程序自动测量。
 
+当 `page_count_scope=paper_body`（例如 CUMCM 2026）时，`--paper-pages` 仍是
+整个 PDF 页数，另须由人核对正文起止页并传入 `--body-pages`。S1 仅用正文页数
+比较 `max_pages`，F1 再核对正文页数、PDF 总页数和受限页数的关系；附录页数
+不会被误算入正文限制。`paper_audit` 只有 PDF 总页数时不作正文超限结论。
+维护者种子仍是 `status=seed`，需要当届官方规则快照后才能作为提交画像。
+
 ### AI 声明格式
 
 `submission_rules.ai_disclosure_format` 只描述 AI report/detail 的内容载体，不替代正文标注和参考文献要求：

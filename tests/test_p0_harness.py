@@ -825,6 +825,62 @@ class P0HarnessTest(unittest.TestCase):
             self.assertEqual(page_count["ai_report_pages"], 3)
             self.assertEqual(page_count["limited_pages"], 19)
 
+    def test_paper_body_limit_uses_verified_body_pages(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="math-harness-body-pages-") as temp:
+            project = Path(temp)
+            paths = self.build_fixture(project)
+            manifest = read_json(paths["manifest"])
+            rules = manifest["competition_profile"]["submission"]
+            rules["page_count_scope"] = "paper_body"
+            rules["max_pages"] = 30
+            write_json(paths["manifest"], manifest)
+            common = (
+                "qa/check_submission.py", "--project-root", str(project),
+                "--run-manifest", paths["manifest"].name, "--paper", paths["paper"].name,
+                "--paper-pages", "42", "--page-count-method", "manual_verified",
+                "--support", paths["support"].name,
+                "--ai-disclosure", paths["ai_disclosure"].name,
+            )
+            missing = self.run_script(*common, "--output", "submission_missing_body.json")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("--body-pages", read_json(project / "submission_missing_body.json")["errors"][0])
+            accepted = self.run_script(
+                *common, "--body-pages", "29", "--output", "submission_body.json",
+            )
+            self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+            page_count = read_json(project / "submission_body.json")["page_count"]
+            self.assertEqual(page_count["total_pages"], 42)
+            self.assertEqual(page_count["body_pages"], 29)
+            self.assertEqual(page_count["limited_pages"], 29)
+            manifest = read_json(paths["manifest"])
+            report_path = project / "submission_body.json"
+            submission_artifact = next(row for row in manifest["artifacts"] if row["role"] == "submission_qa")
+            submission_artifact.update(file_ref(report_path))
+            manifest["gates"]["s1"]["evidence"] = [report_path.name]
+            write_json(paths["manifest"], manifest)
+            frozen = self.run_script(
+                "freeze_submission.py", "--project-root", str(project),
+                "--run-manifest", paths["manifest"].name, "--s1-report", report_path.name,
+                "--paper", paths["paper"].name, "--support", paths["support"].name,
+                "--ai-disclosure", paths["ai_disclosure"].name,
+                "--deadline", "2026-09-01T20:00:00+08:00", "--timezone", "Asia/Hong_Kong",
+                "--output", "submission_body_manifest.json",
+            )
+            self.assertEqual(frozen.returncode, 0, frozen.stdout + frozen.stderr)
+            frozen_paper = read_json(project / "submission_body_manifest.json")["paper"]
+            self.assertEqual(frozen_paper["body_pages"], 29)
+            self.assertEqual(frozen_paper["limited_pages"], 29)
+            checked = self.run_script(
+                "qa/check_submission_manifest.py", "--project-root", str(project),
+                "--submission-manifest", "submission_body_manifest.json",
+            )
+            self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+            exceeded = self.run_script(
+                *common, "--body-pages", "31", "--output", "submission_excess_body.json",
+            )
+            self.assertNotEqual(exceeded.returncode, 0)
+            self.assertTrue(any("maximum is 30" in item for item in read_json(project / "submission_excess_body.json")["errors"]))
+
     def test_max_pages_excludes_ai_report_fails_over_limit(self) -> None:
         with tempfile.TemporaryDirectory(prefix="math-harness-pages-") as temp:
             project = Path(temp)

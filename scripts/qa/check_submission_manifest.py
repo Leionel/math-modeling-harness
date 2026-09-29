@@ -144,6 +144,7 @@ def main() -> int:
                     ("page_count_method", "page_count_method"),
                     ("limited_pages", "limited_pages"),
                     ("ai_report_pages", "ai_report_pages"),
+                    ("body_pages", "body_pages"),
                 ):
                     if page_count.get(report_key) != paper.get(paper_key):
                         errors.append(f"S1 report {report_key} does not match frozen paper record")
@@ -154,12 +155,16 @@ def main() -> int:
         pages = paper.get("pages")
         ai_pages = paper.get("ai_report_pages")
         limited_pages = paper.get("limited_pages")
+        rules = profile.get("submission", {}) if isinstance(profile, dict) else {}
+        body_pages = paper.get("body_pages")
+        counted_pages = body_pages if isinstance(rules, dict) and rules.get("page_count_scope") == "paper_body" else pages
         if isinstance(pages, int) and isinstance(ai_pages, int) and isinstance(limited_pages, int):
-            if ai_pages >= pages:
-                errors.append("paper.ai_report_pages must be smaller than paper.pages")
-            if limited_pages != pages - ai_pages:
-                errors.append("paper.limited_pages must equal pages - ai_report_pages")
-            rules = profile.get("submission", {}) if isinstance(profile, dict) else {}
+            if not isinstance(counted_pages, int) or counted_pages < 1 or counted_pages > pages:
+                errors.append("paper.body_pages must be within paper.pages for paper_body scope")
+            elif ai_pages >= counted_pages:
+                errors.append("paper.ai_report_pages must be smaller than counted pages")
+            elif limited_pages != counted_pages - ai_pages:
+                errors.append("paper.limited_pages must equal counted pages - ai_report_pages")
             max_pages = rules.get("max_pages") if isinstance(rules, dict) else None
             if isinstance(max_pages, int) and limited_pages > max_pages:
                 errors.append("paper.limited_pages exceeds the pinned competition maximum")

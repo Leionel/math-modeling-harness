@@ -38,6 +38,7 @@ def main() -> int:
     parser.add_argument("--run-manifest", required=True)
     parser.add_argument("--paper", required=True)
     parser.add_argument("--paper-pages", type=int)
+    parser.add_argument("--body-pages", type=int, help="manually verified body pages when profile page_count_scope is paper_body")
     parser.add_argument("--page-count-method", choices=["pdfinfo", "pypdf", "manual_verified", "not_applicable"])
     parser.add_argument("--ai-report-pages", type=int, help="pages of the AI report section excluded from page limit")
     parser.add_argument("--support", action="append", default=[])
@@ -170,23 +171,33 @@ def main() -> int:
             errors.append(f"paper exceeds max_paper_bytes: {paper_record['bytes']}")
         max_pages = rules.get("max_pages")
         excludes_ai_report = bool(rules.get("max_pages_excludes_ai_report"))
-        effective_pages = args.paper_pages
+        page_scope = rules.get("page_count_scope")
+        body_pages = args.body_pages if page_scope == "paper_body" else None
+        effective_pages = body_pages if page_scope == "paper_body" else args.paper_pages
         recorded_ai_report_pages = 0
         if not isinstance(args.paper_pages, int) or args.paper_pages < 1:
             errors.append("paper page count is required for an auditable S1 report")
             effective_pages = None
         elif args.page_count_method not in {"pdfinfo", "pypdf", "manual_verified"}:
             errors.append("page_count_method must describe how the page count was verified")
-        elif max_pages is not None:
-            effective_pages = args.paper_pages
+        if page_scope == "paper_body":
+            if not isinstance(args.paper_pages, int) or not isinstance(body_pages, int) or not 1 <= body_pages <= args.paper_pages:
+                errors.append("--body-pages must be a manually verified count within total PDF pages for paper_body scope")
+                effective_pages = None
+        elif args.body_pages is not None:
+            errors.append("--body-pages is only valid for paper_body scope")
+        if isinstance(args.paper_pages, int) and args.paper_pages >= 1 and args.page_count_method in {"pdfinfo", "pypdf", "manual_verified"} and max_pages is not None:
+            base_pages = effective_pages
             if excludes_ai_report:
                 if not isinstance(args.ai_report_pages, int) or args.ai_report_pages < 0:
                     errors.append("ai_report_pages is required when max_pages_excludes_ai_report is true")
                 elif args.ai_report_pages >= args.paper_pages:
                     errors.append("ai_report_pages must be smaller than the total paper page count")
+                elif base_pages is not None and args.ai_report_pages >= base_pages:
+                    errors.append("ai_report_pages must be smaller than the counted page scope")
                 else:
                     recorded_ai_report_pages = args.ai_report_pages
-                    effective_pages = args.paper_pages - args.ai_report_pages
+                    effective_pages = base_pages - args.ai_report_pages if base_pages is not None else None
                     if args.ai_report_pages > 0 and "ai_report_position" not in completed_manual:
                         errors.append("S1 human checkpoint must include 'ai_report_position' manual check when AI report pages are excluded")
                     if args.ai_report_pages > 0 and not ai_used:
@@ -197,10 +208,10 @@ def main() -> int:
                         errors.append("an in-paper AI report is required, so ai_report_pages must be greater than zero")
             elif args.ai_report_pages is not None:
                 errors.append("ai_report_pages was provided but max_pages_excludes_ai_report is not enabled")
-            if effective_pages > max_pages:
-                label = f"{args.paper_pages} pages ({effective_pages} excluding AI report)" if excludes_ai_report else f"{args.paper_pages} pages"
+            if isinstance(effective_pages, int) and effective_pages > max_pages:
+                label = f"{effective_pages} counted pages (PDF total {args.paper_pages})"
                 errors.append(f"paper has {label}; profile maximum is {max_pages}")
-        else:
+        elif max_pages is None:
             if excludes_ai_report:
                 errors.append("max_pages_excludes_ai_report requires a numeric max_pages")
             if args.ai_report_pages is not None:
@@ -324,6 +335,7 @@ def main() -> int:
             "page_count_scope": rules.get("page_count_scope"),
             "page_count": {
                 "total_pages": args.paper_pages,
+                "body_pages": body_pages,
                 "page_count_method": args.page_count_method,
                 "max_pages": max_pages,
                 "max_pages_excludes_ai_report": excludes_ai_report,

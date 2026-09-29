@@ -226,6 +226,8 @@ def evaluate_length_audit(
         )
     elif max_pages is None:
         warnings.append("competition profile has no declared page limit")
+    elif profile.get("submission", {}).get("page_count_scope") == "paper_body":
+        warnings.append("PDF total includes pages outside the paper body; verify body pages separately at S1")
     elif page_count > max_pages:
         message = f"completed PDF has {page_count} pages; declared limit is {max_pages}"
         if profile_status == "verified":

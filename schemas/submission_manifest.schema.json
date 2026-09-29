@@ -81,7 +81,8 @@
         "pages": {"type": "integer", "minimum": 1},
         "page_count_method": {"type": "string", "enum": ["pdfinfo", "pypdf", "manual_verified"]},
         "limited_pages": {"type": "integer", "minimum": 1},
-        "ai_report_pages": {"type": "integer", "minimum": 0}
+        "ai_report_pages": {"type": "integer", "minimum": 0},
+        "body_pages": {"type": "integer", "minimum": 1}
       }
     }
   }

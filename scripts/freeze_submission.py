@@ -26,6 +26,7 @@ def submission_file(
     method: str | None = None,
     limited_pages: int | None = None,
     ai_report_pages: int | None = None,
+    body_pages: int | None = None,
 ) -> dict[str, Any]:
     return {
         "path": rel_path(path, root),
@@ -34,6 +35,7 @@ def submission_file(
         **({"pages": pages, "page_count_method": method} if pages is not None or method is not None else {}),
         **({"limited_pages": limited_pages} if limited_pages is not None else {}),
         **({"ai_report_pages": ai_report_pages} if ai_report_pages is not None else {}),
+        **({"body_pages": body_pages} if body_pages is not None else {}),
     }
 
 
@@ -103,14 +105,19 @@ def _freeze_submission_v2(
     if not isinstance(paper_input, dict) or not isinstance(page_count, dict):
         raise ValueError("S1 report lacks auditable paper/page_count inputs")
     total_pages, ai_report_pages, limited_pages = page_count.get("total_pages"), page_count.get("ai_report_pages"), page_count.get("limited_pages")
-    if not all(isinstance(value, int) for value in (total_pages, ai_report_pages, limited_pages)) or total_pages < 1 or ai_report_pages < 0 or ai_report_pages >= total_pages or limited_pages != total_pages - ai_report_pages:
+    body_pages = page_count.get("body_pages")
+    counted_pages = body_pages if rules.get("page_count_scope") == "paper_body" else total_pages
+    if (not all(isinstance(value, int) for value in (total_pages, ai_report_pages, limited_pages, counted_pages))
+            or total_pages < 1 or counted_pages < 1 or counted_pages > total_pages
+            or ai_report_pages < 0 or ai_report_pages >= counted_pages
+            or limited_pages != counted_pages - ai_report_pages):
         raise ValueError("S1 report page-count relation is invalid")
     max_pages = rules.get("max_pages")
     if isinstance(max_pages, int) and limited_pages > max_pages:
         raise ValueError("S1 report limited_pages exceeds canonical maximum")
     if not rules.get("max_pages_excludes_ai_report") and ai_report_pages != 0:
         raise ValueError("S1 report excludes AI pages but profile does not allow it")
-    paper_record = submission_file(paper_path, root, pages=paper_input.get("pages"), method=paper_input.get("page_count_method"), limited_pages=limited_pages, ai_report_pages=ai_report_pages)
+    paper_record = submission_file(paper_path, root, pages=paper_input.get("pages"), method=paper_input.get("page_count_method"), limited_pages=limited_pages, ai_report_pages=ai_report_pages, body_pages=body_pages)
     support_records = [submission_file(path, root) for path in support_paths]
     ai_record = submission_file(ai_path, root) if ai_path else None
     package_hash = sha256_json({"paper": paper_record, "support_files": support_records, "ai_disclosure": ai_record})
@@ -286,12 +293,14 @@ def main() -> int:
         total_pages = page_count.get("total_pages")
         ai_report_pages = page_count.get("ai_report_pages")
         limited_pages = page_count.get("limited_pages")
-        if not all(isinstance(value, int) for value in (total_pages, ai_report_pages, limited_pages)):
+        body_pages = page_count.get("body_pages")
+        counted_pages = body_pages if rules.get("page_count_scope") == "paper_body" else total_pages
+        if not all(isinstance(value, int) for value in (total_pages, ai_report_pages, limited_pages, counted_pages)):
             raise ValueError("S1 report page_count values must be integers")
-        if total_pages < 1 or ai_report_pages < 0 or ai_report_pages >= total_pages:
+        if total_pages < 1 or counted_pages < 1 or counted_pages > total_pages or ai_report_pages < 0 or ai_report_pages >= counted_pages:
             raise ValueError("S1 report AI page count is outside the valid range")
-        if limited_pages != total_pages - ai_report_pages:
-            raise ValueError("S1 report limited_pages does not equal total_pages - ai_report_pages")
+        if limited_pages != counted_pages - ai_report_pages:
+            raise ValueError("S1 report limited_pages does not equal counted_pages - ai_report_pages")
         max_pages = rules.get("max_pages")
         if isinstance(max_pages, int) and limited_pages > max_pages:
             raise ValueError("S1 report limited_pages exceeds the current competition maximum")
@@ -304,6 +313,7 @@ def main() -> int:
             method=paper_input.get("page_count_method"),
             limited_pages=limited_pages,
             ai_report_pages=ai_report_pages,
+            body_pages=body_pages,
         )
         support_records = [submission_file(path, root) for path in support_paths]
         ai_record = submission_file(ai_path, root) if ai_path else None
