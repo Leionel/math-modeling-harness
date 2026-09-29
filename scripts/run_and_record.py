@@ -173,6 +173,8 @@ def _append_v2_index(
     finished_at: str,
     policy_rule: str,
     policy_path: str,
+    supersedes_receipt_id: str | None = None,
+    generation: int | None = None,
 ) -> None:
     if index_path.is_file():
         raw = load_structured(index_path)
@@ -219,7 +221,7 @@ def _append_v2_index(
         raise ValueError("v2 run_index.receipts must be an array")
     if any(isinstance(row, dict) and row.get("receipt_id") == receipt_id for row in receipts):
         raise ValueError(f"run_index already contains receipt_id {receipt_id}")
-    receipts.append({
+    entry: dict[str, Any] = {
         "receipt_id": receipt_id,
         "receipt_path": rel_path(receipt_path, root),
         "run_id": run_id,
@@ -227,7 +229,12 @@ def _append_v2_index(
         "selected": bool(selected),
         "recorded_at": finished_at,
         "projected_from": f"command_receipt:{receipt_id}",
-    })
+    }
+    if supersedes_receipt_id:
+        entry["supersedes_receipt_id"] = supersedes_receipt_id
+    if generation:
+        entry["generation"] = generation
+    receipts.append(entry)
     selection = index.setdefault("selection", {})
     if not isinstance(selection, dict):
         raise ValueError("v2 run_index.selection must be an object")
@@ -336,6 +343,37 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     previous_hash = _previous_receipt_hash(root, index_path)
     if previous_hash is not None:
         receipt["previous_receipt_hash"] = previous_hash
+    if getattr(args, "supersedes_receipt", None):
+        predecessor_id = str(args.supersedes_receipt)
+        predecessor_receipt = None
+        if index_path and index_path.is_file():
+            index_data = load_structured(index_path)
+            if isinstance(index_data, dict):
+                for row in index_data.get("receipts", []):
+                    if isinstance(row, dict) and str(row.get("receipt_id")) == predecessor_id:
+                        if row.get("run_id") != args.run_id or row.get("stage") != args.stage:
+                            raise ValueError(
+                                f"--supersedes-receipt {predecessor_id} stage/run mismatch (expected stage={args.stage}, run_id={args.run_id})"
+                            )
+                        raw_p = Path(row["receipt_path"])
+                        p_path = raw_p if raw_p.is_absolute() else (root / raw_p).resolve()
+                        if p_path.is_file():
+                            predecessor_receipt = load_structured(p_path)
+                        break
+        if predecessor_receipt is None:
+            candidate = root / "receipts" / f"{predecessor_id}.json"
+            if candidate.is_file():
+                predecessor_receipt = load_structured(candidate)
+                if predecessor_receipt.get("run_id") != args.run_id or predecessor_receipt.get("stage") != args.stage:
+                    raise ValueError(
+                        f"--supersedes-receipt {predecessor_id} stage/run mismatch"
+                    )
+        if predecessor_receipt is None:
+            raise ValueError(f"--supersedes-receipt {predecessor_id} does not exist in run_index or receipts")
+        prev_gen = predecessor_receipt.get("generation", 1) if isinstance(predecessor_receipt, dict) else 1
+        generation = int(prev_gen) + 1
+        receipt["supersedes_receipt_id"] = predecessor_id
+        receipt["generation"] = generation
     receipt["execution_host_identity"] = execution_host_identity()
     if missing_outputs:
         receipt["metadata"].update({"outcome": "failed", "failure_reason": "declared_output_missing", "missing_outputs": missing_outputs})
@@ -349,7 +387,9 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
         _append_v2_index(index_path, root=root, run_id=args.run_id, receipt_id=receipt_id,
                           receipt_path=receipt_path, stage=args.stage, selected=selected,
                            finished_at=finished.isoformat(), policy_rule=policy_rule,
-                           policy_path=policy_path)
+                           policy_path=policy_path,
+                           supersedes_receipt_id=receipt.get("supersedes_receipt_id"),
+                           generation=receipt.get("generation"))
     if missing_outputs:
         print(json.dumps({"ok": False, "command_id": command_id, "receipt_id": receipt_id, "exit_code": result.returncode,
                           "receipt": str(receipt_path), "index_entry": bool(args.index),
@@ -450,6 +490,7 @@ def main() -> int:
     parser.add_argument("--v2", action="store_true", help="write a v2 receipt without requiring a manifest")
     parser.add_argument("--integrity-mode", choices=("sprint", "research", "submission"))
     parser.add_argument("--freeze", action="store_true", help="bind critical I/O for an explicit freeze even in sprint mode")
+    parser.add_argument("--supersedes-receipt", help="receipt id of an earlier run superseded by this command")
     parser.add_argument("--selection-policy", default="first successful run of this stage is selected")
     parser.add_argument("--selected", action="store_true")
     parser.add_argument("--note", default="")

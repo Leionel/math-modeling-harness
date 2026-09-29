@@ -256,12 +256,10 @@ def _freeze_v2(args: argparse.Namespace, *, root: Path, receipt_path: Path, mani
     # metadata.  Use it when no manifest or explicit mode is available so a
     # sprint receipt is not silently promoted to research hashing.
     mode = args.integrity_mode
-    manifest: dict[str, Any] | None = None
     index: Any = None
     require_io_hash: bool | None = None
     if manifest_path is not None:
         state = load_runtime_state(manifest_path, project_root=root, allow_legacy=False)
-        manifest = state.manifest
         if args.integrity_mode and args.integrity_mode != state.preset:
             raise ValueError(
                 "--integrity-mode conflicts with the v2 manifest preset; "
@@ -371,7 +369,7 @@ def _freeze_v2(args: argparse.Namespace, *, root: Path, receipt_path: Path, mani
         "command": f"receipt:{receipt_id}", "seed": args.seed if args.seed is not None else receipt.get("seed"),
         "results_sha256": sha256_json(results), "results": results, "command_receipt": receipt_block,
     }
-    write_json(output, frozen)
+    write_json(output, frozen, overwrite=args.force)
     print(json.dumps({"status": "frozen", "output": rel_path(output, root), "results": len(results),
                       "validation_verdict": overall_verdict, "claimable": claimable,
                       "selected_receipt_id": receipt_id, "warning": "v2 freeze evidence is bound to the selected receipt; free-text command is not authoritative"}, ensure_ascii=False))
@@ -402,10 +400,12 @@ def main() -> int:
     parser.add_argument("--input", action="append", default=[], help="input artifact; repeatable")
     parser.add_argument("--code", action="append", required=True, help="code artifact; repeatable")
     parser.add_argument("--validation", action="append", required=True, help="validation report/log; repeatable")
+    parser.add_argument("--force", action="store_true", help="overwrite existing output file")
     args = parser.parse_args()
 
     root = Path(args.project_root).resolve()
-    manifest_path = resolve_path(args.manifest, root).resolve() if args.manifest else None
+    manifest_candidate = resolve_path(args.manifest, root).resolve() if args.manifest else (root / "run_manifest.json").resolve()
+    manifest_path = manifest_candidate if manifest_candidate.is_file() else None
     receipt_candidate = args.receipt or args.command_receipt
     use_v2 = bool(manifest_path and manifest_path.is_file() and load_structured(manifest_path).get("schema_version") == "2.0")
     if not use_v2 and receipt_candidate:
@@ -529,7 +529,7 @@ def main() -> int:
         }
         if command_receipt_block is not None:
             frozen["command_receipt"] = command_receipt_block
-        write_json(output, frozen)
+        write_json(output, frozen, overwrite=args.force)
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

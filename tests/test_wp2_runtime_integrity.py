@@ -522,7 +522,13 @@ class WP2RuntimeIntegrityTest(unittest.TestCase):
         from tests.test_p0_harness import P0HarnessTest
 
         harness = P0HarnessTest()
-        paths = harness.build_fixture(self.project)
+        legacy = self.project / "legacy-solve-fixture"
+        legacy.mkdir()
+        built = harness.build_fixture(legacy)
+        for source in legacy.iterdir():
+            if source.is_file() and source.name != "run_manifest.json":
+                shutil.copy2(source, self.project / source.name)
+        paths = {key: self.project / path.name for key, path in built.items()}
         run = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "run_and_record.py"), "--v2", "--integrity-mode", "research",
              "--run-id", "demo-run", "--stage", "full", "--receipt", "receipt-v2.json", "--index", "index-v2.json",

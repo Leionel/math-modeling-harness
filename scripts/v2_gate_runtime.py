@@ -329,11 +329,12 @@ def _v2_io_digest_errors(
     root: Path,
     owner: str,
     require_hash: bool,
+    fields: tuple[str, ...] = ("input_refs", "output_refs"),
 ) -> list[str]:
     errors: list[str] = []
     if not require_hash:
         return errors
-    for field in ("input_refs", "output_refs"):
+    for field in fields:
         refs = receipt.get(field)
         if not isinstance(refs, list):
             errors.append(f"{owner}.{field} must be an array")
@@ -384,6 +385,26 @@ def _v2_require_dag_digests(state: Any, roles: tuple[str, ...], errors: list[str
             receipt_id = owner.split(":", 1)[1]
         if not isinstance(receipt_id, str) or not receipt_id:
             return None, "has command_receipt ownership but no producer_receipt_id"
+        if receipts is not None:
+            seen_lineage = set()
+            while True:
+                successor = next(
+                    (
+                        str(r["receipt_id"]) for r in receipts.values()
+                        if isinstance(r, dict)
+                        and r.get("stage") == "freeze"
+                        and (
+                            r.get("supersedes_receipt_id") == receipt_id
+                            or (isinstance(r.get("metadata"), dict) and r["metadata"].get("supersedes_receipt_id") == receipt_id)
+                        )
+                        and _v2_receipt_success(r)
+                    ),
+                    None,
+                )
+                if not successor or successor in seen_lineage:
+                    break
+                seen_lineage.add(successor)
+                receipt_id = successor
         receipt = receipts.get(receipt_id) if receipts is not None else None
         if receipt is None:
             return None, f"references missing digest owner receipt {receipt_id}"
@@ -596,6 +617,74 @@ def _v2_gate_p1(state: Any, capabilities: Any, errors: list[str], evidence: dict
                 errors.extend(f"P1 receipt {receipt_id}: {message}" for message in messages)
         evidence["smoke_coverage_receipt_ids"] = qualified_ids
 
+def _v2_resolve_active_freeze_lineage(
+    freeze: list[dict[str, Any]],
+    run_id: str,
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    if not freeze:
+        errors.append("P2 requires exactly one successful freeze receipt")
+        return []
+    by_id = {str(row.get("receipt_id")): row for row in freeze if row.get("receipt_id")}
+    superseded_by: dict[str, str] = {}
+    lineage_errors: list[str] = []
+
+    for row in freeze:
+        receipt_id = str(row.get("receipt_id"))
+        parent_id = row.get("supersedes_receipt_id") or (
+            row.get("metadata", {}).get("supersedes_receipt_id")
+            if isinstance(row.get("metadata"), dict) else None
+        )
+        if not parent_id:
+            continue
+        parent_id = str(parent_id)
+        if parent_id == receipt_id:
+            lineage_errors.append(f"freeze receipt {receipt_id} cannot supersede itself")
+            continue
+        if parent_id not in by_id:
+            lineage_errors.append(
+                f"freeze receipt {receipt_id} supersedes unknown or unsuccessful freeze receipt {parent_id}"
+            )
+            continue
+        parent_gen = by_id[parent_id].get("generation")
+        curr_gen = row.get("generation")
+        if parent_gen is not None and curr_gen is not None:
+            try:
+                if int(curr_gen) <= int(parent_gen):
+                    lineage_errors.append(
+                        f"freeze receipt {receipt_id} generation {curr_gen} is not strictly greater than predecessor generation {parent_gen}"
+                    )
+            except (ValueError, TypeError):
+                pass
+        if parent_id in superseded_by:
+            lineage_errors.append(
+                f"conflicting supersession: freeze receipts {superseded_by[parent_id]} and {receipt_id} both supersede {parent_id}"
+            )
+            continue
+        superseded_by[parent_id] = receipt_id
+
+    # Check for cycles
+    for start_id in by_id:
+        visited = set()
+        curr = start_id
+        while curr in superseded_by:
+            if curr in visited:
+                lineage_errors.append(f"cycle detected in freeze receipt supersession lineage at {curr}")
+                break
+            visited.add(curr)
+            curr = superseded_by[curr]
+
+    if lineage_errors:
+        errors.extend(lineage_errors)
+        return []
+
+    active = [row for row in freeze if str(row.get("receipt_id")) not in superseded_by]
+    if len(active) != 1:
+        errors.append(f"P2 requires exactly one active freeze lineage, found {len(active)}")
+        return []
+    return active
+
+
 def _v2_gate_p2(state: Any, capabilities: Any, errors: list[str], evidence: dict[str, Any]) -> None:
     index, receipts, receipt_errors = _v2_receipt_projection(state)
     errors.extend(receipt_errors)
@@ -624,14 +713,13 @@ def _v2_gate_p2(state: Any, capabilities: Any, errors: list[str], evidence: dict
                 require_hash=bool(capabilities.require_selected_io_hash),
             )
         )
-    freeze = [
+    all_freeze = [
         row for row in receipts.values()
         if row.get("stage") == "freeze"
         and row.get("run_id") == state.run_id
         and _v2_receipt_success(row)
     ]
-    if len(freeze) != 1:
-        errors.append("P2 requires exactly one successful freeze receipt")
+    freeze = _v2_resolve_active_freeze_lineage(all_freeze, state.run_id, errors)
     frozen_nodes = _v2_root_artifacts(state, "frozen_results")
     if len(frozen_nodes) != 1:
         errors.append("P2 requires exactly one canonical frozen_results artifact")
@@ -716,7 +804,8 @@ def _v2_gate_p2(state: Any, capabilities: Any, errors: list[str], evidence: dict
                 errors,
             )
     evidence["selected_full_receipt_ids"] = [row.get("receipt_id") for row in full]
-    evidence["freeze_receipt_ids"] = [row.get("receipt_id") for row in freeze]
+    evidence["freeze_receipt_ids"] = [row.get("receipt_id") for row in all_freeze]
+    evidence["active_freeze_receipt_ids"] = [row.get("receipt_id") for row in freeze]
     _v2_checkpoint_required(state, capabilities, "p2", errors)
 
 def _v2_gate_w1(state: Any, capabilities: Any, errors: list[str], evidence: dict[str, Any]) -> None:

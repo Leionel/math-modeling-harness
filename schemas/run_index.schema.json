@@ -45,6 +45,16 @@
           "type": "string",
           "minLength": 1,
           "description": "Projection provenance only; execution facts remain owned by the command receipt."
+        },
+        "supersedes_receipt_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional projected ID of an earlier receipt superseded by this receipt."
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional lineage generation counter."
         }
       }
     },

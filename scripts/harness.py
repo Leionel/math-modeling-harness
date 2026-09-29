@@ -410,6 +410,8 @@ def _run(args: argparse.Namespace) -> int:
         command.append("--selected")
     if args.freeze:
         command.append("--freeze")
+    if getattr(args, "supersedes_receipt", None):
+        command.extend(["--supersedes-receipt", args.supersedes_receipt])
     if args.seed is not None:
         command.extend(["--seed", str(args.seed)])
     for path in args.input:
@@ -1229,6 +1231,7 @@ def build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--preset", choices=PRESETS, default="research")
         command_parser.add_argument("--selected", action="store_true")
         command_parser.add_argument("--freeze", action="store_true")
+        command_parser.add_argument("--supersedes-receipt", help="id of earlier receipt this command supersedes in the same run/stage")
         command_parser.add_argument("--seed", type=int)
         command_parser.add_argument("--input", action="append", default=[])
         command_parser.add_argument("--output-artifact", action="append", default=[])

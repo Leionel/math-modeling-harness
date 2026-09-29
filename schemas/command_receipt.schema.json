@@ -51,6 +51,16 @@
           "pattern": "^[A-Fa-f0-9]{64}$",
           "description": "SHA-256 of the previous receipt file bytes in run_index order; absent for the first receipt of an index. Raises detectability of silent history rewrites, not tamper resistance."
         },
+        "supersedes_receipt_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional ID of an earlier receipt in the same run/stage that this receipt supersedes."
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonically increasing lineage generation counter (1 for initial run, predecessor+1 for superseding runs)."
+        },
         "execution_host_identity": {
           "type": "object",
           "additionalProperties": false,
