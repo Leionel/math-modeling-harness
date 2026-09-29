@@ -228,6 +228,9 @@ def run_model_race(
     """Fork candidates and compare their recorded facts; invoke supplied runners."""
     spec = load_race_spec(spec_path)
     output_dir.mkdir(parents=True, exist_ok=True)
+    branches_dir = output_dir / "branches"
+    if branches_dir.is_symlink() or branches_dir.resolve().parent != output_dir.resolve():
+        raise ValueError("race branches directory must stay inside output directory")
     checkpoint_name = spec.get("base_checkpoint", "baseline")
 
     # 1. Verify or create checkpoint on base project
@@ -235,7 +238,6 @@ def run_model_race(
     if not ckpt_file.is_file():
         checkpoints.create_checkpoint(base_project, checkpoint_name, force=True)
 
-    branches_dir = output_dir / "branches"
     branches_dir.mkdir(parents=True, exist_ok=True)
 
     candidate_facts = []
@@ -243,8 +245,8 @@ def run_model_race(
     for cand in spec["candidate_models"]:
         cid = cand["id"]
         branch_root = branches_dir / cid
-        if branch_root.is_symlink():
-            raise ValueError(f"candidate branch must not be a symlink: {cid}")
+        if branch_root.resolve() != branches_dir.resolve() / cid:
+            raise ValueError(f"candidate branch must not redirect elsewhere: {cid}")
         if branch_root.exists():
             shutil.rmtree(branch_root)
 

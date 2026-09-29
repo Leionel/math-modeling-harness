@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -56,6 +57,32 @@ class ModelRacingTest(unittest.TestCase):
             facts = extract_candidate_facts(branch, {"id": "candidate"})
             self.assertFalse(facts["passed_all_gates"])
             self.assertFalse(facts["claimable"])
+
+    def test_cli_rejects_redirected_branches_directory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="race-link-test-") as temp:
+            root = Path(temp)
+            output = root / "output"
+            output.mkdir()
+            victim = root / "victim"
+            victim.mkdir()
+            sentinel = victim / "keep.txt"
+            sentinel.write_text("keep me", encoding="utf-8")
+            try:
+                os.symlink(victim, output / "branches", target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"directory symlink unavailable: {exc}")
+            spec = root / "race.json"
+            spec.write_text(json.dumps({"candidate_models": [
+                {"id": "model_a"}, {"id": "model_b"},
+            ]}), encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "model_racing.py"), "--spec", str(spec),
+                 "--base-project", str(root), "--output-dir", str(output)],
+                text=True, capture_output=True, encoding="utf-8", errors="replace", check=False,
+            )
+            self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+            self.assertIn("branches directory must stay inside", completed.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep me")
 
     def test_model_racing_fork_and_factual_compare(self) -> None:
         with tempfile.TemporaryDirectory(prefix="race-test-") as temp:
