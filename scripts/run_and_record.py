@@ -254,6 +254,41 @@ def _append_v2_index(
     write_json(index_path, index, overwrite=True)
 
 
+def _supersession_preflight(args: argparse.Namespace, root: Path, index_path: Path | None) -> tuple[str, int] | None:
+    if not args.supersedes_receipt:
+        return None
+    predecessor_id = str(args.supersedes_receipt)
+    if re.fullmatch(r"REC-[A-Za-z0-9._-]+", predecessor_id) is None:
+        raise ValueError("--supersedes-receipt must match REC-[A-Za-z0-9._-]+")
+    predecessor_receipt = None
+    if index_path and index_path.is_file():
+        index_data = load_structured(index_path)
+        if isinstance(index_data, dict):
+            for row in index_data.get("receipts", []):
+                if isinstance(row, dict) and str(row.get("receipt_id")) == predecessor_id:
+                    if row.get("run_id") != args.run_id or row.get("stage") != args.stage:
+                        raise ValueError(f"--supersedes-receipt {predecessor_id} stage/run mismatch")
+                    raw_path = Path(row["receipt_path"])
+                    candidate = require_within(
+                        raw_path if raw_path.is_absolute() else root / raw_path,
+                        root, label="predecessor receipt",
+                    )
+                    if candidate.is_file():
+                        predecessor_receipt = load_structured(candidate)
+                    break
+    if predecessor_receipt is None:
+        candidate = root / "receipts" / f"{predecessor_id}.json"
+        if candidate.is_file():
+            predecessor_receipt = load_structured(candidate)
+    if not isinstance(predecessor_receipt, dict):
+        raise ValueError(f"--supersedes-receipt {predecessor_id} does not exist in run_index or receipts")
+    if predecessor_receipt.get("receipt_id") != predecessor_id:
+        raise ValueError(f"--supersedes-receipt {predecessor_id} receipt id mismatch")
+    if predecessor_receipt.get("run_id") != args.run_id or predecessor_receipt.get("stage") != args.stage:
+        raise ValueError(f"--supersedes-receipt {predecessor_id} stage/run mismatch")
+    return predecessor_id, int(predecessor_receipt.get("generation", 1)) + 1
+
+
 def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, argv: list[str]) -> int:
     mode, policy_rule = _v2_policy(args, manifest_path, root)
     coverage_declared = bool(args.covers_model or args.covers_question or args.covers_contract_item)
@@ -278,6 +313,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     if args.index:
         raw_index = root / args.index if not Path(args.index).is_absolute() else Path(args.index)
         index_path = require_within(raw_index, root, label="--index")
+    supersession = _supersession_preflight(args, root, index_path)
     selected = bool(args.selected)
     hash_io = mode == "submission" or (mode == "research" and selected) or bool(args.freeze)
     input_targets: list[Path] = []
@@ -343,35 +379,8 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     previous_hash = _previous_receipt_hash(root, index_path)
     if previous_hash is not None:
         receipt["previous_receipt_hash"] = previous_hash
-    if getattr(args, "supersedes_receipt", None):
-        predecessor_id = str(args.supersedes_receipt)
-        predecessor_receipt = None
-        if index_path and index_path.is_file():
-            index_data = load_structured(index_path)
-            if isinstance(index_data, dict):
-                for row in index_data.get("receipts", []):
-                    if isinstance(row, dict) and str(row.get("receipt_id")) == predecessor_id:
-                        if row.get("run_id") != args.run_id or row.get("stage") != args.stage:
-                            raise ValueError(
-                                f"--supersedes-receipt {predecessor_id} stage/run mismatch (expected stage={args.stage}, run_id={args.run_id})"
-                            )
-                        raw_p = Path(row["receipt_path"])
-                        p_path = raw_p if raw_p.is_absolute() else (root / raw_p).resolve()
-                        if p_path.is_file():
-                            predecessor_receipt = load_structured(p_path)
-                        break
-        if predecessor_receipt is None:
-            candidate = root / "receipts" / f"{predecessor_id}.json"
-            if candidate.is_file():
-                predecessor_receipt = load_structured(candidate)
-                if predecessor_receipt.get("run_id") != args.run_id or predecessor_receipt.get("stage") != args.stage:
-                    raise ValueError(
-                        f"--supersedes-receipt {predecessor_id} stage/run mismatch"
-                    )
-        if predecessor_receipt is None:
-            raise ValueError(f"--supersedes-receipt {predecessor_id} does not exist in run_index or receipts")
-        prev_gen = predecessor_receipt.get("generation", 1) if isinstance(predecessor_receipt, dict) else 1
-        generation = int(prev_gen) + 1
+    if supersession is not None:
+        predecessor_id, generation = supersession
         receipt["supersedes_receipt_id"] = predecessor_id
         receipt["generation"] = generation
     receipt["execution_host_identity"] = execution_host_identity()

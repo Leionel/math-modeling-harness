@@ -125,6 +125,22 @@ class RunAndRecordTest(unittest.TestCase):
             self.assertIn("refusing to overwrite immutable receipt", result.stdout)
             self.assertFalse(marker.exists())
 
+    def test_invalid_supersession_is_rejected_before_child_runs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="math-run-record-supersession-") as temp:
+            project = Path(temp)
+            marker = project / "ran.txt"
+            result = self._run(
+                "--run-id", "run-1", "--stage", "freeze", "--v2",
+                "--receipt", "receipts/new.json", "--supersedes-receipt", "REC-missing",
+                "--", sys.executable, "-c",
+                "from pathlib import Path; Path('ran.txt').write_text('ran', encoding='utf-8')",
+                cwd=project,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("does not exist", result.stdout)
+            self.assertFalse(marker.exists())
+            self.assertFalse((project / "receipts" / "new.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
