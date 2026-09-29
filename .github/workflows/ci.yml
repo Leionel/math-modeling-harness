@@ -108,4 +108,4 @@ jobs:
       - name: Windows path-semantics subset
         # Explicit module list: the default shell on Windows runners is
         # PowerShell, which has no heredoc for an inline Python snippet.
-        run: python -m unittest tests.test_mcp_server tests.test_agent_policy tests.test_agent_contracts tests.test_runtime_api tests.test_execution_capsule tests.test_receipt_chain_and_decisions tests.test_recovery_fixture -v
+        run: python -m unittest tests.test_mcp_server tests.test_agent_policy tests.test_agent_contracts tests.test_runtime_api tests.test_execution_capsule tests.test_receipt_chain_and_decisions tests.test_recovery_fixture tests.test_paper_audit_cli tests.test_review_tex_source tests.test_claim_microcases tests.test_harness_cli.HarnessCliTest.test_status_reports_selected_output_drift_while_m1_remains_blocked -v
