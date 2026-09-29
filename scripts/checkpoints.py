@@ -71,6 +71,21 @@ def _snapshot_files(root: Path, state: Any) -> dict[str, str]:
                         candidate = (root / str(node["path"])).resolve()
                         if candidate.is_file():
                             record(candidate)
+    comp_ref = state.manifest.get("competition_profile_ref")
+    if isinstance(comp_ref, Mapping) and isinstance(comp_ref.get("path"), str):
+        comp_path = (root / comp_ref["path"]).resolve()
+        if comp_path.is_file():
+            record(comp_path)
+            try:
+                prof_doc = load_structured(comp_path)
+                for rule in prof_doc.get("official_rules", []) if isinstance(prof_doc, Mapping) else []:
+                    snap = rule.get("snapshot", {}).get("path") if isinstance(rule, Mapping) else None
+                    if isinstance(snap, str):
+                        snap_p = (root / snap).resolve()
+                        if snap_p.is_file():
+                            record(snap_p)
+            except Exception:
+                pass
     return dict(sorted(files.items()))
 
 
@@ -189,7 +204,7 @@ def fork_project(
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "files": sorted(copied),
     }
-    write_json(destination / FORK_RECORD, record)
+    write_json(destination / FORK_RECORD, record, overwrite=force)
     child_checkpoint = checkpoint_path(destination, name)
     child_checkpoint.parent.mkdir(parents=True, exist_ok=True)
     write_json(child_checkpoint, document, overwrite=force)
