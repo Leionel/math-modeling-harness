@@ -23,6 +23,24 @@
     "v2": {
       "type": "object",
       "additionalProperties": false,
+      "oneOf": [
+        {"properties": {"exit_code": {"type": "integer"}}},
+        {
+          "required": ["metadata"],
+          "properties": {
+            "exit_code": {"type": "null"},
+            "metadata": {
+              "type": "object",
+              "required": ["outcome", "failure_reason", "timeout_seconds"],
+              "properties": {
+                "outcome": {"const": "failed"},
+                "failure_reason": {"const": "timeout"},
+                "timeout_seconds": {"type": "integer", "minimum": 1}
+              }
+            }
+          }
+        }
+      ],
       "required": ["schema_version", "receipt_id", "command_id", "run_id", "stage", "argv", "cwd", "exit_code", "started_at", "finished_at", "stdout_path", "stderr_path", "input_refs", "output_refs"],
       "properties": {
         "schema_version": { "const": "2.0" },
@@ -32,7 +50,7 @@
         "stage": { "type": "string", "enum": ["safety", "smoke", "full", "freeze", "evidence", "qa", "review", "submission"] },
         "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } },
         "cwd": { "type": "string", "minLength": 1 },
-        "exit_code": { "type": "integer" },
+        "exit_code": { "type": ["integer", "null"] },
         "started_at": { "type": "string", "minLength": 1 },
         "finished_at": { "type": "string", "minLength": 1 },
         "duration_s": { "type": "number", "minimum": 0 },

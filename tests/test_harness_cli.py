@@ -92,6 +92,18 @@ class HarnessCliTest(unittest.TestCase):
         self.assertNotIn("commands", manifest)
         self.assertNotIn("gates", manifest)
 
+    def test_execute_timeout_keeps_failure_receipt(self) -> None:
+        self.project.mkdir()
+        completed = self.run_cli(
+            "execute", "--project", str(self.project), "--stage", "full",
+            "--run-id", "run-timeout", "--receipt", "receipts/timed.json",
+            "--timeout", "1", "--", sys.executable, "-c", "import time; time.sleep(5)",
+        )
+        self.assertEqual(completed.returncode, 124, completed.stdout + completed.stderr)
+        receipt = self.read("receipts/timed.json")
+        self.assertIsNone(receipt["exit_code"])
+        self.assertEqual(receipt["metadata"]["failure_reason"], "timeout")
+
     def test_init_status_and_check_have_factual_first_blocker_and_json(self) -> None:
         self.init()
         status = self.run_cli("status", "--project", str(self.project), "--json")

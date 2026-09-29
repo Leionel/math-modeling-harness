@@ -141,6 +141,31 @@ class RunAndRecordTest(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertFalse((project / "receipts" / "new.json").exists())
 
+    def test_v2_timeout_records_failure_without_child_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="math-run-record-timeout-") as temp:
+            project = Path(temp)
+            result = self._run(
+                "--run-id", "run-timeout", "--stage", "full", "--v2",
+                "--receipt", "receipts/timed.json", "--index", "run_index.json",
+                "--timeout", "1", "--", sys.executable, "-c",
+                "import time; print('started', flush=True); time.sleep(5)",
+                cwd=project,
+            )
+            self.assertEqual(result.returncode, 124, result.stdout + result.stderr)
+            receipt_path = project / "receipts" / "timed.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertIsNone(receipt["exit_code"])
+            self.assertEqual(receipt["metadata"]["failure_reason"], "timeout")
+            self.assertEqual(receipt["metadata"]["timeout_seconds"], 1)
+            self.assertIn("started", (project / receipt["stdout_path"]).read_text(encoding="utf-8"))
+            self.assertTrue((project / "run_index.json").is_file())
+            _, schema_errors, _ = _validate_document(receipt_path, ROOT / "schemas" / "command_receipt.schema.json")
+            self.assertEqual(schema_errors, [])
+            receipt["metadata"].pop("timeout_seconds")
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            _, invalid_errors, _ = _validate_document(receipt_path, ROOT / "schemas" / "command_receipt.schema.json")
+            self.assertTrue(invalid_errors)
+
 
 if __name__ == "__main__":
     unittest.main()

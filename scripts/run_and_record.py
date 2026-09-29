@@ -291,6 +291,8 @@ def _supersession_preflight(args: argparse.Namespace, root: Path, index_path: Pa
 
 def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, argv: list[str]) -> int:
     mode, policy_rule = _v2_policy(args, manifest_path, root)
+    if args.timeout is not None and args.timeout < 1:
+        raise ValueError("--timeout must be a positive number of seconds")
     coverage_declared = bool(args.covers_model or args.covers_question or args.covers_contract_item)
     if coverage_declared and args.stage != "smoke":
         raise ValueError("--covers-* arguments are only valid for a smoke receipt")
@@ -343,10 +345,22 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
         raise ValueError(f"--command-cwd is not a directory: {command_cwd}")
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     started = datetime.now(timezone.utc)
-    result = subprocess.run(argv, cwd=str(command_cwd), text=True, capture_output=True, encoding="utf-8", errors="replace", check=False)
+    timed_out = False
+    try:
+        result = subprocess.run(
+            argv, cwd=str(command_cwd), text=True, capture_output=True,
+            encoding="utf-8", errors="replace", check=False, timeout=args.timeout,
+        )
+        exit_code = result.returncode
+        stdout, stderr = result.stdout or "", result.stderr or ""
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        exit_code = None
+        stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
     finished = datetime.now(timezone.utc)
-    stdout_path.write_text(result.stdout or "", encoding="utf-8")
-    stderr_path.write_text(result.stderr or "", encoding="utf-8")
+    stdout_path.write_text(stdout, encoding="utf-8")
+    stderr_path.write_text(stderr, encoding="utf-8")
     missing_outputs: list[str] = []
     output_refs: list[dict[str, Any]] = []
     for path, existed_before in output_targets:
@@ -357,7 +371,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     receipt: dict[str, Any] = {
         "schema_version": "2.0", "receipt_id": receipt_id, "command_id": command_id,
         "run_id": args.run_id, "stage": args.stage, "argv": argv, "cwd": str(command_cwd),
-        "exit_code": result.returncode, "started_at": started.isoformat(), "finished_at": finished.isoformat(),
+        "exit_code": exit_code, "started_at": started.isoformat(), "finished_at": finished.isoformat(),
         "duration_s": round((finished - started).total_seconds(), 3), "seed": args.seed,
         "stdout_path": rel_path(stdout_path, root), "stderr_path": rel_path(stderr_path, root),
         "input_refs": input_refs, "output_refs": output_refs,
@@ -384,10 +398,14 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
         receipt["supersedes_receipt_id"] = predecessor_id
         receipt["generation"] = generation
     receipt["execution_host_identity"] = execution_host_identity()
-    if missing_outputs:
+    if timed_out:
+        receipt["metadata"].update({"outcome": "failed", "failure_reason": "timeout", "timeout_seconds": args.timeout})
+        if missing_outputs:
+            receipt["metadata"]["missing_outputs"] = missing_outputs
+    elif missing_outputs:
         receipt["metadata"].update({"outcome": "failed", "failure_reason": "declared_output_missing", "missing_outputs": missing_outputs})
     else:
-        receipt["metadata"]["outcome"] = "success" if result.returncode == 0 else "failed"
+        receipt["metadata"]["outcome"] = "success" if exit_code == 0 else "failed"
     schema_errors = validate_value(receipt, COMMAND_RECEIPT_SCHEMA)
     if schema_errors:
         raise ValueError("generated command receipt violates schema: " + "; ".join(schema_errors))
@@ -399,14 +417,19 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
                            policy_path=policy_path,
                            supersedes_receipt_id=receipt.get("supersedes_receipt_id"),
                            generation=receipt.get("generation"))
+    if timed_out:
+        print(json.dumps({"ok": False, "command_id": command_id, "receipt_id": receipt_id,
+                          "exit_code": None, "receipt": str(receipt_path), "index_entry": bool(args.index),
+                          "errors": [f"command timed out after {args.timeout} seconds"]}, ensure_ascii=False))
+        return 124
     if missing_outputs:
-        print(json.dumps({"ok": False, "command_id": command_id, "receipt_id": receipt_id, "exit_code": result.returncode,
+        print(json.dumps({"ok": False, "command_id": command_id, "receipt_id": receipt_id, "exit_code": exit_code,
                           "receipt": str(receipt_path), "index_entry": bool(args.index),
                           "errors": [f"declared output was not produced: {path}" for path in missing_outputs]}, ensure_ascii=False))
         return 3
-    print(json.dumps({"ok": result.returncode == 0, "command_id": command_id, "receipt_id": receipt_id,
-                      "exit_code": result.returncode, "receipt": str(receipt_path), "index_entry": bool(args.index)}, ensure_ascii=False))
-    return result.returncode
+    print(json.dumps({"ok": exit_code == 0, "command_id": command_id, "receipt_id": receipt_id,
+                      "exit_code": exit_code, "receipt": str(receipt_path), "index_entry": bool(args.index)}, ensure_ascii=False))
+    return exit_code
 
 
 def _run_v1(args: argparse.Namespace, root: Path, argv: list[str]) -> int:
@@ -504,6 +527,7 @@ def main() -> int:
     parser.add_argument("--selected", action="store_true")
     parser.add_argument("--note", default="")
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--timeout", type=int, help="v2 command time limit in seconds")
     parser.add_argument("--input", action="append", default=[])
     parser.add_argument("--output-artifact", action="append", default=[])
     parser.add_argument("--covers-model", action="append", default=[], help="model id exercised by this smoke command")
@@ -548,6 +572,8 @@ def main() -> int:
         manifest_path = (root / args.manifest).resolve() if not Path(args.manifest).is_absolute() else Path(args.manifest).resolve()
     use_v2 = bool(args.v2 or (manifest_path is not None and _read_manifest_schema(manifest_path) == "2.0"))
     try:
+        if args.timeout is not None and not use_v2:
+            raise ValueError("--timeout requires a v2 receipt")
         return _run_v2(args, root, manifest_path, argv) if use_v2 else _run_v1(args, root, argv)
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(json.dumps({"ok": False, "errors": [str(exc)]}, ensure_ascii=False))

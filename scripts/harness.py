@@ -415,6 +415,8 @@ def _run(args: argparse.Namespace) -> int:
         command.extend(["--supersedes-receipt", args.supersedes_receipt])
     if args.seed is not None:
         command.extend(["--seed", str(args.seed)])
+    if args.timeout is not None:
+        command.extend(["--timeout", str(args.timeout)])
     for path in args.input:
         command.extend(["--input", path])
     for path in args.output_artifact:
@@ -1242,6 +1244,7 @@ def build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--freeze", action="store_true")
         command_parser.add_argument("--supersedes-receipt", help="id of earlier receipt this command supersedes in the same run/stage")
         command_parser.add_argument("--seed", type=int)
+        command_parser.add_argument("--timeout", type=int, help="command time limit in seconds")
         command_parser.add_argument("--input", action="append", default=[])
         command_parser.add_argument("--output-artifact", action="append", default=[])
         command_parser.add_argument("--covers-model", action="append", default=[], help="model id exercised by a smoke command")
