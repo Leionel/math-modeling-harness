@@ -167,6 +167,7 @@
 - 明确每个子问题的 conclusion type、输入和输出；不要只写算法名称。
 - 如果题目对某问有明确交付答案，建议在 `questions[].required_answer` 登记 `answer_type`、`quantity`、`unit`、`scope`、`must_satisfy` 和 `reporting_semantics`，必要时补 `output_names`。它是“题目要求的答案”与“模型实际输出”的桥，不是另一个 `answer_contract.json`，也不规定所有题目必须输出同一种类型。
 - `models[].inputs` 中的每个输入都必须在 `plan_details.parameter_plan[]` 出现，并使用 typed provenance；不能只在数据源列表里声明一次就算完成参数解释。
+- 对有决策时点的模型，在 `decision_context` 声明决策时间列与 `feature_policy`；`data_contract.columns[]` 可为**直接使用的原始列**声明 `availability`（`known_at_decision`、`future_dependent`、`unknown`），派生列继续使用 `derived_feature_lineage[].availability`。严格决策策略下，直接输入若缺可用性声明也不能判为已知；`forbidden_future_features` 中被实际使用的列同样报错。旧合同不强制补该可选字段；`feature_policy=not_applicable` 可以表达事后 oracle，但论文答案仍须用 `required_answer.reporting_semantics` 说明其信息边界。
 - `plan_details.scaffold_entry`（可选）把选型结论绑定到 `scripts/scaffold/` 的具体入口（如 `scripts/scaffold/opt_milp.py`），让编码从已审计的脚手架开始，而不是空白文件；候选比较时应把它作为"实现成本"的一个信号。
 - 为变量填写含义、单位、定义域和角色；无量纲量显式写 `dimensionless`。
 - 声明单位可写成 `J`、`kg*m^2/s^2`、`kg m² s⁻²`、`item/day` 等表达式；`check_units.py` 会比较量纲与精确缩放。公式正文不会被反向猜单位，`m/s` 与 `km/h` 也不会自动换算，数值转换必须在实现和验证中显式完成。

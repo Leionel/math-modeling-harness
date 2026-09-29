@@ -90,8 +90,6 @@ def _check_observation_structure(
                 errors.append(f"derived feature {feature_id} references missing source column: {source_column}")
         if row.get("status") != "verified":
             errors.append(f"derived feature {feature_id} lineage status is not verified")
-        if row.get("availability") == "future_dependent" and row.get("status") == "verified":
-            errors.append(f"derived feature {feature_id} is future_dependent and cannot be a validated feature")
 
     models = [row for row in model.get("models", []) if isinstance(row, dict)]
     for model_row in models:
@@ -102,6 +100,16 @@ def _check_observation_structure(
             for feature_id, row in lineage_by_feature.items()
             if any(_input_mentions(item, feature_id) for item in inputs if isinstance(item, str))
         }
+        used_raw = {
+            column_name: column for column_name, column in columns.items()
+            if isinstance(column_name, str)
+            and column_name not in lineage_by_feature
+            and any(_input_mentions(item, column_name) for item in inputs if isinstance(item, str))
+        }
+        used_availability = {
+            **{name: row.get("availability") for name, row in used_raw.items()},
+            **{name: row.get("availability") for name, row in used_lineage.items()},
+        }
         decision = model_row.get("decision_context")
         if isinstance(decision, dict):
             decision_column = decision.get("decision_time_column")
@@ -110,21 +118,24 @@ def _check_observation_structure(
             if time_key and decision_column != time_key:
                 errors.append(f"model {model_id} decision time column differs from observation_structure.time_key")
             policy = decision.get("feature_policy")
-            for feature_id, lineage in used_lineage.items():
-                availability = lineage.get("availability")
+            for feature_id, availability in used_availability.items():
                 if policy in {"known_at_decision", "strict_pre_cutoff"} and availability != "known_at_decision":
                     errors.append(
                         f"model {model_id} uses feature {feature_id} with availability={availability!r} "
                         f"under feature_policy={policy}"
                     )
-        elif used_lineage and require_decision_context:
-            errors.append(f"model {model_id} uses derived features but has no decision_context")
+            forbidden = set(decision.get("forbidden_future_features", []))
+            used_forbidden = sorted(name for name in columns if name in forbidden and any(_input_mentions(item, name) for item in inputs if isinstance(item, str)))
+            if used_forbidden:
+                errors.append(f"model {model_id} uses forbidden_future_features: {used_forbidden}")
+        elif used_availability and require_decision_context:
+            errors.append(f"model {model_id} uses availability-declared inputs but has no decision_context")
 
         future_features = [
-            feature_id for feature_id, lineage in used_lineage.items()
-            if lineage.get("availability") in {"future_dependent", "unknown"}
+            feature_id for feature_id, availability in used_availability.items()
+            if availability in {"future_dependent", "unknown"}
         ]
-        if future_features:
+        if future_features and not (isinstance(decision, dict) and decision.get("feature_policy") == "not_applicable"):
             errors.append(f"model {model_id} uses unavailable-at-decision feature(s): {future_features}")
 
         if observation.get("repeated_measure") is True:

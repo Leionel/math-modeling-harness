@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import subprocess
@@ -108,6 +107,42 @@ class StatisticalUnitAndOOSTest(unittest.TestCase):
             result = self.run_checker(root, data, model, "--require-observation-structure", "--require-decision-context")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("future_dependent", result.stdout)
+
+    def test_raw_input_availability_distinguishes_policy_from_oracle(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="raw-decision-time-") as temp:
+            root = Path(temp)
+            data, model = self.build_data_and_model(root)
+            contract = json.loads(data.read_text(encoding="utf-8"))
+            contract["derived_feature_lineage"] = []
+            feature = next(row for row in contract["columns"] if row["name"] == "x")
+            feature["availability"] = "future_dependent"
+            write_json(data, contract)
+            flags = ("--require-observation-structure", "--require-decision-context")
+            rejected = self.run_checker(root, data, model, *flags)
+            self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+            self.assertIn("model M1 uses feature x with availability='future_dependent'", rejected.stdout)
+
+            model_contract = json.loads(model.read_text(encoding="utf-8"))
+            model_contract["models"][0]["decision_context"]["feature_policy"] = "not_applicable"
+            write_json(model, model_contract)
+            oracle = self.run_checker(root, data, model, *flags)
+            self.assertEqual(oracle.returncode, 0, oracle.stdout + oracle.stderr)
+
+            feature["availability"] = "known_at_decision"
+            write_json(data, contract)
+            model_contract["models"][0]["decision_context"] = {
+                "decision_time_column": "time", "feature_policy": "known_at_decision",
+                "target_horizon": "one step", "forbidden_future_features": ["x"],
+            }
+            write_json(model, model_contract)
+            forbidden = self.run_checker(root, data, model, *flags)
+            self.assertEqual(forbidden.returncode, 1)
+            self.assertIn("forbidden_future_features", forbidden.stdout)
+
+            model_contract["models"][0]["decision_context"].pop("forbidden_future_features")
+            write_json(model, model_contract)
+            valid = self.run_checker(root, data, model, *flags)
+            self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
 
     def test_repeated_measure_ml_cannot_use_row_split_as_primary_validation(self) -> None:
         with tempfile.TemporaryDirectory(prefix="row-split-") as temp:

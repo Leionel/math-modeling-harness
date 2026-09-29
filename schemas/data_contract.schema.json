@@ -58,6 +58,7 @@
         "missing_count": {"type": "integer", "minimum": 0},
         "unique": {"type": "boolean"},
         "role": {"type": "string", "enum": ["identifier", "feature", "target", "time", "group", "weight", "output", "metadata"]},
+        "availability": {"type": "string", "enum": ["known_at_decision", "future_dependent", "unknown"]},
         "allowed": {"$ref": "#/$defs/allowed"}
       }
     },
