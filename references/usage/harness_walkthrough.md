@@ -56,6 +56,7 @@ preset 可以收紧某个 Gate 的要求,但**永远关不掉**这几样:安全�
 | 覆盖契约条目 | 同上,加 `--covers-model` / `--covers-question` / `--covers-contract-item` | P1/P2 能核验的覆盖率 |
 | 冻结数字 | `harness freeze --project <ROOT> --kind results --source <文件>` | 绑定到**被选中回执**的冻结结果 |
 | 起草论文 | `harness paper plan --project <ROOT>`,再 `harness figure --project <ROOT>` | 论文计划、分节草稿、图约 |
+| 草稿诊断 | `harness paper audit --project <ROOT> --tex paper/main.tex --pdf paper/main.pdf --log paper/main.log --plan .harness/contracts/paper_plan.json --json` | 只读的 TeX/PDF 问题清单，`gate_effect=none` |
 | 评审 | `harness review --project <ROOT> --semantic` | `reports/review/*.json`,带结论和独立性等级 |
 | 重算某个 Gate | `harness check --project <ROOT> W1` | 结论,或者"为什么没有结论" |
 | 跑整条 W2 确定性 QA | `harness validate --project <ROOT>` | 过 Gate 检查器的结果 |
@@ -69,6 +70,10 @@ preset 可以收紧某个 Gate 的要求,但**永远关不掉**这几样:安全�
 
 **投影不是真相。** `harness prepare M1|W1|W2|S1` 把磁盘上已有的东西渲染成人看的视图
 (状态文本、清单)。它不写结论,你去改投影也改变不了任何事实。
+
+`paper audit` 可在 M1 阻断时检查已有草稿，不执行编译或正式评审。退出码 0 表示完成且无高严重度发现，1 表示完成但有高严重度发现，2 表示输入错误；未提供 PDF、log 或计划时，相应检查会列在 `skipped_checks`。只有构建回执的源树和 PDF 哈希都与当前文件相符，`source_binding` 才是 `verified`。正式 W2 仍要求已登记的论文产物、确定性 QA、独立 review 和相应人工 checkpoint。
+
+`harness status --project <ROOT> --json` 的 `readiness_diagnostics` 是只读预诊断：分组显示未核验的外部规则、待人工决定、首个正式 Gate 阻断、选中回执输出字节漂移，以及当前草稿候选问题。输出漂移复用 P2 的摘要核对函数；后续 Gate 尚未执行时不会在此伪造 PASS 或 FAIL。
 
 ## 什么时候必须你亲自点头
 

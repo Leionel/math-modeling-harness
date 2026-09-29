@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
 from _common import load_structured, rel_path, resolve_path  # noqa: E402
+from qa.tex_source import read_visible_text  # noqa: E402
 
 
 STRONG_MARKERS = ("证明", "最优", "最佳", "显著", "稳健", "广泛适用", "prove", "optimal", "best", "significant", "robust")
@@ -190,7 +191,7 @@ def main() -> int:
     judge_report = None
     try:
         plan = load_structured(plan_path)
-        draft = draft_path.read_text(encoding="utf-8")
+        draft = read_visible_text(draft_path, root)
         if not isinstance(plan, dict):
             raise ValueError("paper_plan must be an object")
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
@@ -220,8 +221,8 @@ def main() -> int:
 
     overlap = None
     if args.abstract and args.conclusion:
-        abstract = resolve_path(args.abstract, root).resolve().read_text(encoding="utf-8")
-        conclusion = resolve_path(args.conclusion, root).resolve().read_text(encoding="utf-8")
+        abstract = read_visible_text(resolve_path(args.abstract, root).resolve(), root)
+        conclusion = read_visible_text(resolve_path(args.conclusion, root).resolve(), root)
         tokens_a = set(re.findall(r"[\w\u4e00-\u9fff]+", abstract.casefold()))
         tokens_b = set(re.findall(r"[\w\u4e00-\u9fff]+", conclusion.casefold()))
         overlap = len(tokens_a & tokens_b) / max(1, len(tokens_a | tokens_b))
@@ -243,8 +244,8 @@ def main() -> int:
         abstract_text = None
         if args.abstract:
             try:
-                abstract_text = resolve_path(args.abstract, root).resolve().read_text(encoding="utf-8")
-            except OSError as exc:
+                abstract_text = read_visible_text(resolve_path(args.abstract, root).resolve(), root)
+            except (OSError, ValueError) as exc:
                 warnings.append(f"judge_scan abstract could not be read: {exc}")
         judge_report = judge_scan(
             plan,

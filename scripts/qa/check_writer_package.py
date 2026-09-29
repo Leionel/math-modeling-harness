@@ -19,6 +19,7 @@ from qa.reader_integrity import (  # noqa: E402
     exposed_identifiers,
     source_issues,
 )
+from qa.tex_source import load_tex_source  # noqa: E402
 
 
 NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_])[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?(?![A-Za-z0-9_])")
@@ -27,7 +28,6 @@ CJK_CHAR_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 CAUSAL_MARKERS = ("导致", "造成", "使得", "证明", "表明", "because", "therefore", "causes", "demonstrates")
 STRONG_CAUSAL_MARKERS = ("导致", "造成", "使得", "causes", "because")
 STRENGTH_MARKERS = ("最优", "显著", "稳健", "提升", "optimal", "significant", "robust", "improve")
-INPUT_RE = re.compile(r"\\(?:input|include)\{([^}]+)\}")
 
 
 def _strip_latex_comments(text: str) -> str:
@@ -41,23 +41,9 @@ def _strip_invisible_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", _strip_latex_comments(text), flags=re.DOTALL)
 
 
-def _load_tex_tree(path: Path, seen: set[Path] | None = None) -> str:
-    """Expand local input/include files for first-draft coverage checks."""
-    seen = set() if seen is None else seen
-    path = path.resolve()
-    if path in seen or not path.exists():
-        return ""
-    seen.add(path)
-    text = path.read_text(encoding="utf-8")
-
-    def replace(match: re.Match[str]) -> str:
-        target = match.group(1).strip()
-        child = (path.parent / target)
-        if child.suffix.lower() != ".tex":
-            child = child.with_suffix(".tex")
-        return "\n" + _load_tex_tree(child, seen) + "\n"
-
-    return INPUT_RE.sub(replace, text)
+def _load_tex_tree(path: Path, project_root: Path | None = None) -> str:
+    """Expand the same project-contained source used by the other paper checks."""
+    return load_tex_source(path, project_root or path.parent).text
 
 
 def _strength_marker_is_qualified(text: str, marker: str) -> bool:
@@ -109,7 +95,7 @@ def main() -> int:
     try:
         package = load_structured(package_path)
         draft = draft_path.read_text(encoding="utf-8")
-        coverage_draft = _load_tex_tree(draft_path)
+        coverage_draft = _load_tex_tree(draft_path, root)
         numeric_draft = _strip_latex_comments(draft)
         if not isinstance(package, dict) or package.get("schema_version") != "1.0":
             raise ValueError("writer package must have schema_version=1.0")

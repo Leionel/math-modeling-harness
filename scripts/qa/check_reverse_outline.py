@@ -231,7 +231,7 @@ def main() -> int:
     warnings: list[str] = []
     try:
         plan = load_structured(resolve_path(args.paper_plan, root).resolve())
-        draft = _load_tex_tree(resolve_path(args.draft, root).resolve())
+        draft = _load_tex_tree(resolve_path(args.draft, root).resolve(), root)
         package = None
         if args.writer_package:
             package = load_structured(resolve_path(args.writer_package, root).resolve())

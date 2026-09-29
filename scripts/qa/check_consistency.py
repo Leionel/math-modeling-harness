@@ -21,6 +21,7 @@ from qa.presentation_semantics import (  # noqa: E402
     evaluate_terminology_consistency,
 )
 from qa.validate_contracts import _validate_document  # noqa: E402
+from qa.tex_source import read_visible_text  # noqa: E402
 
 
 FIGURE_ROLE_SEMANTIC_TYPES = {
@@ -92,10 +93,10 @@ def canonical_display(value: Any, precision: int) -> str | None:
         return None
 
 
-def read_text(path: Path, label: str, errors: list[str]) -> str | None:
+def read_text(path: Path, label: str, errors: list[str], project_root: Path | None = None) -> str | None:
     try:
-        return path.read_text(encoding="utf-8")
-    except OSError as exc:
+        return read_visible_text(path, project_root or path.parent)
+    except (OSError, ValueError) as exc:
         errors.append(f"{label} cannot be read: {exc}")
         return None
 
@@ -483,7 +484,7 @@ def main() -> int:
     for label, raw_path in (("abstract", args.abstract), ("paper", args.paper), ("conclusion", args.conclusion)):
         if raw_path:
             path = resolve_path(raw_path, root).resolve()
-            content = read_text(path, label, errors)
+            content = read_text(path, label, errors, root)
             if content is not None:
                 text_sources[label] = content
     if args.abstract is None and abstract_results:

@@ -16,30 +16,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
 from _common import load_structured, rel_path, resolve_path, write_json  # noqa: E402
+from qa.tex_source import load_tex_source  # noqa: E402
 
 
 WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*")
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
-INPUT_RE = re.compile(r"\\(?:input|include)\{([^}]+)\}")
 COMMENT_RE = re.compile(r"(?<!\\)%[^\r\n]*")
 COMMAND_RE = re.compile(r"\\[A-Za-z@]+(?:\[[^\]]*\])?(?:\{[^{}]*\})?")
 
 
-def _load_tex_tree(path: Path, seen: set[Path] | None = None) -> str:
-    seen = set() if seen is None else seen
-    path = path.resolve()
-    if path in seen:
-        return ""
-    seen.add(path)
-    text = path.read_text(encoding="utf-8")
-
-    def include(match: re.Match[str]) -> str:
-        child = path.parent / match.group(1).strip()
-        if child.suffix.lower() != ".tex":
-            child = child.with_suffix(".tex")
-        return "\n" + _load_tex_tree(child, seen) + "\n" if child.is_file() else ""
-
-    return INPUT_RE.sub(include, text)
+def _load_tex_tree(path: Path, project_root: Path | None = None) -> str:
+    return load_tex_source(path, project_root or path.parent).text
 
 
 def _count_words(text: str) -> int:
@@ -327,7 +314,7 @@ def main() -> int:
         if not isinstance(plan, dict) or not isinstance(profile, dict):
             raise ValueError("paper plan and competition profile must be objects")
         draft = (
-            _load_tex_tree(draft_path)
+            _load_tex_tree(draft_path, root)
             if draft_path.suffix.casefold() == ".tex"
             else draft_path.read_text(encoding="utf-8")
         )

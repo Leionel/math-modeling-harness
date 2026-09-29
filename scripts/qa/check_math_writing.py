@@ -31,6 +31,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parent))
 
 from _common import load_structured, rel_path, resolve_path  # noqa: E402
 from qa.validate_contracts import _validate_document  # noqa: E402
+from qa.tex_source import read_visible_text  # noqa: E402
 
 
 FORMULATION_ROLES = {"model_choice", "mechanism_derivation", "parameter_evidence"}
@@ -481,7 +482,7 @@ def main() -> int:
             writer_package = load_structured(resolve_path(args.writer_package, root).resolve())
             if not isinstance(writer_package, dict) or writer_package.get("schema_version") != "1.0":
                 errors.append("writer_package must have schema_version=1.0")
-        draft = draft_path.read_text(encoding="utf-8")
+        draft = read_visible_text(draft_path, root)
         if not isinstance(contract, dict) or not isinstance(plan, dict):
             raise ValueError("model contract and paper plan must be objects")
         if frozen is not None and not isinstance(frozen, dict):

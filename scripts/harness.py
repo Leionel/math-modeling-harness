@@ -55,6 +55,7 @@ from views.writing_spine import compile_section_brief, compile_writing_spine  # 
 from views.setup_card import build_setup_card  # noqa: E402
 from precedents.select_reference_cards import select_cards  # noqa: E402
 from qa.plan_selective_rerun import plan_selective_rerun  # noqa: E402
+from qa.paper_audit import audit_paper  # noqa: E402
 from doctor_core import STAGES as DOCTOR_STAGES, evaluate_capabilities  # noqa: E402
 from gate_order import GATE_ORDER  # noqa: E402
 
@@ -763,6 +764,14 @@ def _solve(args: argparse.Namespace) -> int:
 
 def _paper(args: argparse.Namespace) -> int:
     root = _project(args)
+    if args.paper_action == "audit":
+        result = audit_paper(
+            root, tex=args.tex, pdf=args.pdf, log=args.log,
+            plan=args.plan, build_receipt=args.build_receipt,
+        )
+        human = f"paper audit: {len(result['findings'])} finding(s), {len(result['skipped_checks'])} skipped check(s); no Gate state changed"
+        _emit(result, machine=args.json, human=human)
+        return 0 if result["ok"] else 1
     if args.paper_action == "plan":
         if args.compile:
             result = compile_paper_plan(
@@ -1335,6 +1344,15 @@ def build_parser() -> argparse.ArgumentParser:
     paper_plan.add_argument("--source", help="authoring source; defaults to .harness/authoring/paper_plan.yaml")
     paper_plan.add_argument("--output", help="compiled JSON path; defaults to .harness/contracts/paper_plan.json")
     paper_plan.set_defaults(handler=_paper)
+
+    paper_audit = paper_sub.add_parser("audit", help="read-only TeX/PDF draft diagnostics; no Gate verdict")
+    _add_common(paper_audit)
+    paper_audit.add_argument("--tex", required=True, help="project-relative TeX entrypoint")
+    paper_audit.add_argument("--pdf", help="existing PDF for page diagnostics")
+    paper_audit.add_argument("--log", help="existing TeX build log")
+    paper_audit.add_argument("--plan", help="compiled paper plan for draft alignment")
+    paper_audit.add_argument("--build-receipt", help="existing safe-build receipt for source/PDF binding")
+    paper_audit.set_defaults(handler=_paper)
 
     paper_section = paper_sub.add_parser("section", help="create a flexible section-local authoring surface")
     paper_section_sub = paper_section.add_subparsers(dest="paper_section_action", required=True)

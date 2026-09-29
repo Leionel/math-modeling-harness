@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
 from _common import load_structured, rel_path, resolve_path  # noqa: E402
+from qa.tex_source import load_tex_source  # noqa: E402
 
 
 def unique_duplicates(items: Iterable[str]) -> dict[str, int]:
@@ -51,27 +52,9 @@ def extract_figures(text: str) -> list[str]:
     return re.findall(r"\\includegraphics(?:\[[^]]*\])?\{([^}]*)\}", text)
 
 
-def load_tex_tree(main_path: Path) -> tuple[list[Path], list[str]]:
-    files: list[Path] = []
-    contents: list[str] = []
-    visited: set[Path] = set()
-
-    def visit(path: Path) -> None:
-        resolved = path.resolve()
-        if resolved in visited:
-            return
-        visited.add(resolved)
-        text = strip_comments(resolved.read_text(encoding="utf-8", errors="replace"))
-        files.append(resolved)
-        contents.append(text)
-        for child in re.findall(r"\\(?:input|include)\{([^}]*)\}", text):
-            child_path = resolved.parent / child
-            if child_path.suffix == "":
-                child_path = child_path.with_suffix(".tex")
-            visit(child_path)
-
-    visit(main_path)
-    return files, contents
+def load_tex_tree(main_path: Path, project_root: Path | None = None) -> tuple[list[Path], list[str]]:
+    source = load_tex_source(main_path, project_root or main_path.parent)
+    return list(source.files), [source.text]
 
 
 def main() -> int:
@@ -95,8 +78,8 @@ def main() -> int:
     if args.tex:
         main_tex = resolve_path(args.tex, root).resolve()
         try:
-            tex_files, tex_parts = load_tex_tree(main_tex)
-        except OSError as exc:
+            tex_files, tex_parts = load_tex_tree(main_tex, root)
+        except (OSError, ValueError) as exc:
             tex_files, tex_parts = [main_tex], []
             errors.append(f"cannot read LaTeX tree from {main_tex}: {exc}")
     else:
