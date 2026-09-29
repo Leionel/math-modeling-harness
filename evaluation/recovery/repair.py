@@ -207,6 +207,7 @@ def repair(
     ]
     repaired = bool(
         view.exit_code == 0
+        and gate_rerun_steps
         and all(row.get("executed") and row.get("exit_code") == 0 for row in gate_rerun_steps)
     )
     report = {

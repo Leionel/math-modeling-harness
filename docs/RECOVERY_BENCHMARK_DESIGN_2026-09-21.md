@@ -91,7 +91,7 @@ PASS/FAIL 判定（单故障）：
    - `rerun`：产物有 producer receipt（经 run_index 的 `output_refs` 反查）且 stage ∈ {smoke, full, freeze}——用 `harness execute` 重放记录的 argv（重写旧项目根拼写，含 Windows 8.3 短名两种形态），每步留新 receipt；freeze stage 带有 `--freeze` 与 `--supersedes-receipt` 声明新 generation；
    - `contract_blocked`：无 automated rerun 通道的产物（如 review 阶段）；
    - `author_plane`：作者平面产物无 producer receipt——记录为需重做/重审。
-3. 复检目标 gate，写 `.harness/recovery/<fault_id>.json`（步骤、receipt 路径、gate 报告、repaired 判定）；`repaired` = gate PASS 且目标 gate 所需的重跑步骤均已成功执行。
+3. 复检目标 gate，写 `.harness/recovery/<fault_id>.json`（步骤、receipt 路径、gate 报告、repaired 判定）；`repaired` = gate PASS，且至少一个目标 gate 所需的重跑步骤真实执行并全部成功。只有作者平面步骤或空步骤时不能因 gate 原本为 PASS 而报修复成功。
 4. 修复器自身绝不手写改写 artifact、receipt、hash 或 verdict。
 
 ## 6. 已知 gap（动态回写）

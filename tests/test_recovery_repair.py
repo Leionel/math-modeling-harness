@@ -26,6 +26,28 @@ class RecoveryRepairTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.fixture = built_fixture()
 
+    def test_cli_does_not_claim_repair_without_executed_step(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="repair-failed-plan-") as temp:
+            project = Path(temp) / "project"
+            shutil.copytree(self.fixture, project)
+            plan = Path(temp) / "plan.json"
+            plan.write_text(json.dumps({
+                "ok": False, "errors": ["unresolved dependency"],
+                "rerun_steps": [{"path": "never-made.txt", "role": "paper_source"}],
+            }), encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(REPAIR), "--project-root", str(project),
+                 "--fault-id", "INVALID", "--gate", "P2", "--plan", str(plan)],
+                text=True, capture_output=True, encoding="utf-8", errors="replace",
+                check=False, env=UTF8_ENV,
+            )
+            self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+            self.assertFalse(json.loads(completed.stdout)["ok"])
+            report = json.loads((project / ".harness" / "recovery" / "INVALID.json").read_text(encoding="utf-8"))
+            self.assertFalse(report["repaired"])
+            self.assertFalse(report["plan_ok"])
+            self.assertFalse(report["steps"][0]["executed"])
+
     def test_freeze_artifact_repair_succeeds_via_supersession(self) -> None:
         """GAP-R1 closed: a deleted frozen result (F03) can be recovered through
         freeze supersession. The executor re-runs the freeze step declaring
