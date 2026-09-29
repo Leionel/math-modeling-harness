@@ -23,7 +23,7 @@ from _common import human_confirmed_checkpoints, load_structured, rel_path, reso
 from operator_mode import declared_mode  # noqa: E402
 from project_layout import resolve_manifest_path  # noqa: E402
 from runtime_state import RuntimeStateError, load_runtime_state  # noqa: E402
-from v2_gate_runtime import _v2_gate  # noqa: E402
+from v2_gate_runtime import _v2_gate, _v2_io_digest_errors, _v2_receipt_projection  # noqa: E402
 from gate_order import GATE_ORDER  # noqa: E402
 from redaction import redact_text  # noqa: E402
 from ruleset import ruleset_fingerprint  # noqa: E402
@@ -285,6 +285,102 @@ def _failures_summary(
     return {"count": len(items), "items": items}
 
 
+def _readiness_diagnostics(
+    state: Any,
+    *,
+    first_blocked: str | None,
+    gate_reports: Mapping[str, Mapping[str, Any]],
+    pending: list[dict[str, Any]],
+    review: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Show independent preflight observations without evaluating later Gates."""
+
+    result: dict[str, Any] = {
+        "gate_effect": "none",
+        "external_rules": [],
+        "human_decisions": [],
+        "contracts_and_roles": [],
+        "selected_output": [],
+        "draft": [],
+    }
+    if state.profile.get("status") != "verified":
+        result["external_rules"].append({
+            "message": "competition profile is not verified against official rules",
+            "path": rel_path(state.profile_path, state.root),
+        })
+    for row in pending:
+        result["human_decisions"].append({
+            "stage": row.get("stage"),
+            "message": "human checkpoint is pending",
+            "next_action": "obtain the named human review, then record its decision with `harness checkpoint approve --help`",
+        })
+    if first_blocked is not None:
+        gate_errors = list(gate_reports[first_blocked].get("errors", []))
+        result["contracts_and_roles"].append({
+            "gate": first_blocked,
+            "message": "first formal Gate is blocked",
+            "error_count": len(gate_errors),
+            "errors": gate_errors[:5],
+            "next_action": f"harness check {first_blocked.upper()} --project <PROJECT_ROOT>",
+        })
+    perspectives = review.get("perspectives", {})
+    if isinstance(perspectives, Mapping):
+        missing = [name for name, view in perspectives.items()
+                   if isinstance(view, Mapping) and view.get("required") and not view.get("executed")]
+        if missing:
+            result["contracts_and_roles"].append({
+                "message": "required review perspectives have not run",
+                "roles": missing,
+                "next_action": "harness review --project <PROJECT_ROOT>",
+            })
+
+    index, receipts, projection_errors = _v2_receipt_projection(state)
+    for error in projection_errors:
+        result["selected_output"].append({"status": "unverified", "message": redact_text(error)})
+    if index is not None:
+        selection = index.get("selection", {})
+        selected_ids = selection.get("selected_receipt_ids", []) if isinstance(selection, Mapping) else []
+        if isinstance(selected_ids, list):
+            for receipt_id in selected_ids:
+                receipt = receipts.get(str(receipt_id))
+                if receipt is None:
+                    continue
+                errors = _v2_io_digest_errors(
+                    receipt, root=state.root, owner=f"selected receipt {receipt_id}",
+                    require_hash=bool(state.capabilities.require_selected_io_hash),
+                    fields=("output_refs",),
+                )
+                result["selected_output"].append({
+                    "receipt_id": receipt_id,
+                    "status": "drift" if any("SHA-256 drift" in error for error in errors)
+                    else "unverified" if errors or not state.capabilities.require_selected_io_hash else "current",
+                    "errors": [redact_text(error) for error in errors],
+                    "next_action": "inspect the selected run output and rerun or reselect a valid full receipt" if errors else None,
+                })
+
+    tex = state.root / "paper" / "main.tex"
+    if tex.is_file():
+        from qa.paper_audit import audit_paper
+
+        options = {
+            name: f"paper/{name}" for name in ("main.pdf", "main.log")
+            if (state.root / "paper" / name).is_file()
+        }
+        plan = state.root / ".harness" / "contracts" / "paper_plan.json"
+        try:
+            audit = audit_paper(
+                state.root, tex="paper/main.tex",
+                pdf=options.get("main.pdf"), log=options.get("main.log"),
+                plan=".harness/contracts/paper_plan.json" if plan.is_file() else None,
+            )
+            result["draft"] = audit["findings"]
+            result["draft_source_binding"] = audit["source_binding"]
+        except (OSError, ValueError, TypeError) as exc:
+            result["draft"].append({"severity": "unverified", "message": redact_text(str(exc))})
+        result["draft_next_action"] = "harness paper audit --project <PROJECT_ROOT> --tex paper/main.tex --json"
+    return result
+
+
 def _v2_status(state: Any, *, ruleset: Mapping[str, Any] | None = None) -> dict[str, Any]:
     ruleset = ruleset or ruleset_fingerprint(SCRIPT_DIR.parent)
     pending = _pending_checkpoints(state.manifest)
@@ -308,6 +404,10 @@ def _v2_status(state: Any, *, ruleset: Mapping[str, Any] | None = None) -> dict[
         if not ok and first_blocked is None:
             first_blocked = gate
             break
+    diagnostics = _readiness_diagnostics(
+        state, first_blocked=first_blocked, gate_reports=gate_reports,
+        pending=pending, review=review,
+    )
     return {
         "ok": True,
         "schema_version": "2.0",
@@ -334,6 +434,7 @@ def _v2_status(state: Any, *, ruleset: Mapping[str, Any] | None = None) -> dict[
         "dag": dag,
         "stale_artifacts": dag["stale_artifacts"],
         "review": review,
+        "readiness_diagnostics": diagnostics,
         "failures_summary": _failures_summary(gate_reports, pending, receipts, dag, review),
         "next_action": _next_action(first_blocked, pending, dag["stale_artifacts"], review),
         "generated_at": datetime.now(timezone.utc).isoformat(),

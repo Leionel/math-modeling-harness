@@ -125,6 +125,42 @@ class HarnessCliTest(unittest.TestCase):
         self.assertNotIn("expected_sha256", json.dumps(report))
         self.assertNotIn("actual_sha256", json.dumps(report))
 
+    def test_status_reports_selected_output_drift_while_m1_remains_blocked(self) -> None:
+        self.init()
+        output = self.project / "results" / "selected.json"
+        output.parent.mkdir()
+        output.write_text("original", encoding="utf-8")
+        receipt_id = "REC-STATUS-TEST"
+        receipt_path = self.project / "receipts" / "full.json"
+        receipt_path.parent.mkdir()
+        receipt_path.write_text(json.dumps({
+            "schema_version": "2.0", "receipt_id": receipt_id,
+            "run_id": self.read("run_manifest.json")["run_id"], "stage": "full",
+            "exit_code": 0, "metadata": {"outcome": "success"},
+            "input_refs": [], "output_refs": [{
+                "path": "results/selected.json",
+                "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+            }],
+        }), encoding="utf-8")
+        index = self.read("run_index.json")
+        index["receipts"] = [{
+            "receipt_id": receipt_id, "receipt_path": "receipts/full.json",
+            "run_id": self.read("run_manifest.json")["run_id"], "stage": "full", "selected": True,
+        }]
+        index["selection"]["selected_receipt_ids"] = [receipt_id]
+        (self.project / "run_index.json").write_text(json.dumps(index), encoding="utf-8")
+        output.write_text("changed", encoding="utf-8")
+
+        status = self.run_cli("status", "--project", str(self.project), "--json")
+        self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
+        report = json.loads(status.stdout)
+        self.assertEqual(report["first_blocked_gate"], "m1")
+        self.assertEqual(set(report["gates"]), {"m1"})
+        diagnostics = report["readiness_diagnostics"]
+        self.assertEqual(diagnostics["gate_effect"], "none")
+        self.assertEqual(diagnostics["selected_output"][0]["status"], "drift")
+        self.assertIn("SHA-256 drift", diagnostics["selected_output"][0]["errors"][0])
+
     def test_fake_v2_gate_state_is_rejected_instead_of_trusted(self) -> None:
         self.init()
         manifest = self.read("run_manifest.json")
