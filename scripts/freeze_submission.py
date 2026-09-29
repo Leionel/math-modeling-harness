@@ -137,7 +137,7 @@ def _freeze_submission_v2(
             raise ValueError(f"official rule snapshot does not exist: {snapshot['path']}")
         rule_refs.append({"path": rel_path(snapshot_path, root), "sha256": sha256_file(snapshot_path)})
     submission = {
-        "schema_version": "1.1", "project_id": manifest["project_id"], "run_id": manifest["run_id"],
+        "schema_version": "1.2" if body_pages is not None else "1.1", "project_id": manifest["project_id"], "run_id": manifest["run_id"],
         "status": "final_frozen", "frozen_at": datetime.now(timezone.utc).isoformat(),
         "competition": {
             "profile_id": profile["profile_id"],
@@ -329,7 +329,7 @@ def main() -> int:
         if not args.timezone.strip():
             raise ValueError("--timezone must be non-empty")
         submission = {
-            "schema_version": "1.1",
+            "schema_version": "1.2" if body_pages is not None else "1.1",
             "project_id": manifest["project_id"],
             "run_id": manifest["run_id"],
             "status": "final_frozen",

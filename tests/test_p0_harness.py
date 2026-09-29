@@ -868,6 +868,7 @@ class P0HarnessTest(unittest.TestCase):
             )
             self.assertEqual(frozen.returncode, 0, frozen.stdout + frozen.stderr)
             frozen_paper = read_json(project / "submission_body_manifest.json")["paper"]
+            self.assertEqual(read_json(project / "submission_body_manifest.json")["schema_version"], "1.2")
             self.assertEqual(frozen_paper["body_pages"], 29)
             self.assertEqual(frozen_paper["limited_pages"], 29)
             checked = self.run_script(
@@ -875,6 +876,15 @@ class P0HarnessTest(unittest.TestCase):
                 "--submission-manifest", "submission_body_manifest.json",
             )
             self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+            tampered = read_json(project / "submission_body_manifest.json")
+            tampered["paper"].pop("body_pages")
+            write_json(project / "submission_body_manifest.json", tampered)
+            rejected = self.run_script(
+                "qa/check_submission_manifest.py", "--project-root", str(project),
+                "--submission-manifest", "submission_body_manifest.json",
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("requires body_pages", rejected.stdout)
             exceeded = self.run_script(
                 *common, "--body-pages", "31", "--output", "submission_excess_body.json",
             )

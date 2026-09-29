@@ -71,4 +71,4 @@ S1 report 和 F1 paper record 都保存总页数、AI report 页数、受限页�
 
 `submission_manifest.json` 禁止覆盖。论文、附件、AI 声明、规则或截止时间变化时，重新执行 S1，并生成新的 F1 文件；不要修改旧 manifest。
 
-当前 F1 schema 为 `1.1`。它用 `run_manifest` 指向完整控制面，并在 `paper` 中保存 `pages`、`ai_report_pages` 与 `limited_pages`；这是相对早期 `1.0` 草案的破坏性合同升级。
+F1 `1.2` 在 `page_count_scope=paper_body` 时增加 `paper.body_pages` 并严格核对正文页数；整份 PDF 计数仍写 `1.1`。历史 `1.1` 清单保持可读，但若画像声称 `paper_body`，检查器会提示其正文合规性未单独核实。两版均用 `run_manifest` 指向完整控制面。

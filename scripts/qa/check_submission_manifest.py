@@ -157,8 +157,13 @@ def main() -> int:
         limited_pages = paper.get("limited_pages")
         rules = profile.get("submission", {}) if isinstance(profile, dict) else {}
         body_pages = paper.get("body_pages")
-        counted_pages = body_pages if isinstance(rules, dict) and rules.get("page_count_scope") == "paper_body" else pages
+        body_scope = isinstance(rules, dict) and rules.get("page_count_scope") == "paper_body"
+        if body_scope and value.get("schema_version") == "1.1":
+            warnings.append("legacy F1 1.1 counted the whole PDF; body page compliance was not separately verified")
+        counted_pages = body_pages if body_scope and value.get("schema_version") == "1.2" else pages
         if isinstance(pages, int) and isinstance(ai_pages, int) and isinstance(limited_pages, int):
+            if value.get("schema_version") == "1.2" and body_scope and body_pages is None:
+                errors.append("F1 1.2 paper_body record requires body_pages")
             if not isinstance(counted_pages, int) or counted_pages < 1 or counted_pages > pages:
                 errors.append("paper.body_pages must be within paper.pages for paper_body scope")
             elif ai_pages >= counted_pages:

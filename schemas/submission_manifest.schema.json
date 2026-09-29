@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "project_id", "run_id", "status", "frozen_at", "competition", "deadline", "paper", "support_files", "ai_disclosure", "s1_report", "run_manifest", "package_sha256", "builder"],
   "properties": {
-    "schema_version": {"type": "string", "const": "1.1"},
+    "schema_version": {"type": "string", "enum": ["1.1", "1.2"]},
     "project_id": {"type": "string", "minLength": 1},
     "run_id": {"type": "string", "minLength": 1},
     "status": {"type": "string", "const": "final_frozen"},
