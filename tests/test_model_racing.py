@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import checkpoints  # noqa: E402
 from _recovery_baseline import built_fixture  # noqa: E402
-from model_racing import run_model_race  # noqa: E402
+from model_racing import extract_candidate_facts, run_model_race  # noqa: E402
 
 
 class ModelRacingTest(unittest.TestCase):
@@ -46,6 +46,16 @@ class ModelRacingTest(unittest.TestCase):
             self.assertIn("invalid candidate id", completed.stderr)
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep me")
             self.assertFalse(output.exists())
+
+    def test_declared_frozen_claim_cannot_override_failed_gates(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="race-gates-test-") as temp:
+            branch = Path(temp)
+            (branch / "frozen_results.json").write_text(json.dumps({
+                "claimable": True, "validation_verdict": "PASS", "results": [],
+            }), encoding="utf-8")
+            facts = extract_candidate_facts(branch, {"id": "candidate"})
+            self.assertFalse(facts["passed_all_gates"])
+            self.assertFalse(facts["claimable"])
 
     def test_model_racing_fork_and_factual_compare(self) -> None:
         with tempfile.TemporaryDirectory(prefix="race-test-") as temp:
@@ -89,6 +99,7 @@ class ModelRacingTest(unittest.TestCase):
 
             # Assertions
             self.assertEqual(comparison["race_id"], "test_race_01")
+            self.assertEqual(comparison["execution_mode"], "fork_and_inspect_only")
             self.assertEqual(len(comparison["candidates"]), 2)
             cands = {c["candidate_id"]: c for c in comparison["candidates"]}
             self.assertIn("model_a_exact", cands)

@@ -96,7 +96,11 @@ def extract_candidate_facts(branch_root: Path, candidate_meta: dict[str, Any]) -
             frozen = load_structured(frozen_path)
             if isinstance(frozen, dict):
                 facts["validation_verdict"] = frozen.get("validation_verdict")
-                facts["claimable"] = frozen.get("claimable", False)
+                facts["claimable"] = bool(
+                    frozen.get("claimable")
+                    and frozen.get("validation_verdict") == "PASS"
+                    and facts["passed_all_gates"]
+                )
                 for res in frozen.get("results", []):
                     if isinstance(res, dict) and "name" in res and "value" in res:
                         facts["results"][res["name"]] = {
@@ -221,7 +225,7 @@ def run_model_race(
     *,
     execute_runners: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Execute full model race workflow."""
+    """Fork candidates and compare their recorded facts; invoke supplied runners."""
     spec = load_race_spec(spec_path)
     output_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_name = spec.get("base_checkpoint", "baseline")
@@ -257,6 +261,7 @@ def run_model_race(
         candidate_facts.append(facts)
 
     comparison = build_racing_comparison(spec, candidate_facts)
+    comparison["execution_mode"] = "custom_runner_invoked" if execute_runners else "fork_and_inspect_only"
     md_content = render_comparison_markdown(comparison)
 
     write_json(output_dir / "race_summary.json", comparison, overwrite=True)
