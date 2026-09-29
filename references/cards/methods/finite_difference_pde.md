@@ -23,24 +23,30 @@
 \[
 -k \left.\frac{\partial u}{\partial x}\right|_{x=0} = h_0 [u_{\text{ext}}(t) - u(0, t)], \quad \left.\frac{\partial u}{\partial x}\right|_{x=L} = 0
 \]
-时空网格离散（步长 $\Delta x$, $\Delta t$），采用隐式 Crank-Nicolson 或显式 FTCS 格式：
+时空网格离散（步长 $\Delta x$, $\Delta t$）。对 $v\ge 0$ 用迎风差分
+$D_x^{\mathrm{up}}u_i=(u_i-u_{i-1})/\Delta x$；对 $v<0$ 改用
+$(u_{i+1}-u_i)/\Delta x$。令
+$L_xu_i=(u_{i+1}-2u_i+u_{i-1})/\Delta x^2$，则 $\theta$ 格式为：
 \[
-\frac{u_i^{n+1} - u_i^n}{\Delta t} = \alpha \left[ \theta \frac{u_{i+1}^{n+1} - 2u_i^{n+1} + u_{i-1}^{n+1}}{\Delta x^2} + (1-\theta) \frac{u_{i+1}^n - 2u_i^n + u_{i-1}^n}{\Delta x^2} \right]
+\frac{u_i^{n+1}-u_i^n}{\Delta t}
++v\bigl[\theta D_x^{\mathrm{up}}u_i^{n+1}+(1-\theta)D_x^{\mathrm{up}}u_i^n\bigr]
+=\alpha\bigl[\theta L_xu_i^{n+1}+(1-\theta)L_xu_i^n\bigr]
++\theta S_i^{n+1}+(1-\theta)S_i^n.
 \]
-其中 $\theta = 1/2$ 为二阶无条件稳定 Crank-Nicolson 格式；$\theta = 0$ 为显式格式。
+其中 $\theta=1/2$ 为时间二阶的 Crank–Nicolson 格式，$\theta=0$ 为显式格式；上述迎风空间项为一阶。稳定性结论必须针对完整的对流、扩散、源项与边界离散检验，不能直接沿用纯扩散方程的结论。
 
 ## 5. 参数来源要求
 - 介质物性常数（$\rho, c, k$）必须标明 `GIVEN`（赛题给定）或 `LITERATURE`（权威标准文献并注明源）；
 - 对流换热系数 $h$ 若通过试验测定必须标明 `CALIBRATED`，并给出标定目标函数与残差统计。
 
 ## 6. 推荐 Baseline
-- 稳态一维解析解基线（$\frac{\partial u}{\partial t} = 0$ 时的稳态线性温度分布）；
+- 无源、无对流且常系数的一维稳态线性解基线；
 - 集总参数法（Lumped Capacitance Model，将空间平均化为单变量 ODE 基线）。
 
 ## 7. 必须验证的东西
-- **网格收敛性检验（Grid Convergence / Independence）**：空间步长 $\Delta x \to \Delta x / 2$、时间步长 $\Delta t \to \Delta t / 2$，数值解相对 $L_2$ 范数变化须 $< 1\%$；
-- **稳定性条件与 CFL 准则验证**：对于显式格式，严格检验 Fourier 稳定性数 $Fo = \alpha \Delta t / \Delta x^2 \le 1/2$ 与 Courant 数 $Cr = v \Delta t / \Delta x \le 1$；
-- **能量/质量全局守恒律**：总热量变化 $\Delta E = \int_{\Omega} \rho c [u(x, T) - u(x, 0)] dx$ 必须与进出边界的热通量时间积分一致，相对守恒误差 $< 0.1\%$；
+- **网格收敛性检验（Grid Convergence / Independence）**：空间步长 $\Delta x \to \Delta x / 2$、时间步长 $\Delta t \to \Delta t / 2$，报告数值解差异及与赛题精度要求对应的阈值；
+- **稳定性条件与 CFL 准则验证**：显式迎风对流加中心扩散的内点格式，可用 $|Cr|+2Fo\le1$ 作为非负系数的充分条件；边界更新另行检查。仅分别满足 $Fo\le1/2$ 和 $|Cr|\le1$ 不够；
+- **能量/质量全局守恒律**：总储量变化必须与扩散及对流边界通量、域内源项的时间积分相符；报告离散守恒残差及任务相关容差；
 - **极值原理（Maximum Principle）检验**：无内部热源时，区域内极值必出现在初始时刻或边界上，禁止出现非物理的超温或低于环境温度的反常激波。
 
 ## 8. 常见数学错误
@@ -55,8 +61,8 @@
 
 ## 10. 论文表达规范
 - 必须明确写出连续偏微分方程、定解条件（IC/BC）及无量纲化过程（若有）；
-- 给出时空离散格式的截断误差阶数（如 $O(\Delta t^2 + \Delta x^2)$）；
+- 给出实际采用格式的截断误差阶数；上面的迎风项只有一阶空间精度，不能写成整体 $O(\Delta t^2+\Delta x^2)$；
 - 附时空温度/浓度分布等高线热图（Contour Plot）与关键特征截面曲线。
 
 ## 11. 推荐实现入口
-`scripts/scaffold/pde_finite_difference.py`
+当前仓库没有通用 PDE scaffold。按实际方程和边界条件实现求解器，并用真实运行回执、收敛表和守恒残差验证。

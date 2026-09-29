@@ -33,7 +33,7 @@ S_{i}^{\text{local}} = \left. \frac{\partial y}{\partial x_i} \right|_{\mathbf{x
 - **单变量局部单因子摄动（OAT / One-At-a-Time Perturbation）**：每次只让一个参数变动 $\pm 5\%, \pm 10\%, \pm 20\%$，绘制蜘蛛图（Spider Plot）或龙卷风图（Tornado Plot）。
 
 ## 7. 必须验证的东西
-- **一阶指数与总效应指数的数学相容性**：恒有 $0 \le S_i \le S_{Ti} \le 1$；若出现 $S_i > S_{Ti}$ 则说明样本量不足或准蒙特卡罗积分未收敛；
+- **一阶指数与总效应指数的数学相容性**：独立输入的总体指数满足 $0 \le S_i \le S_{Ti} \le 1$；有限样本估计可能暂时越界，应连同置信区间与收敛检查报告，不能静默裁剪成合法值；
 - **总和检验**：若各参数近似线性独立无交互，则 $\sum_i S_i \approx 1$；若存在强非线性交互项，则 $\sum_i S_i < 1$ 且 $\sum_i S_{Ti} > 1$；
 - **抽样收敛性检验（Bootstrap CI）**：通过 Bootstrap 自助重抽样给出各灵敏度指数的 $95\%$ 置信区间，确保关键参数排序在误差范围内不变。
 
@@ -52,4 +52,4 @@ S_{i}^{\text{local}} = \left. \frac{\partial y}{\partial x_i} \right|_{\mathbf{x
 - 给出对实际决策的稳健性建议（如“系统对弹体下沉速度最敏感，设计控制应首要保证引信定高精度”）。
 
 ## 11. 推荐实现入口
-`scripts/scaffold/sobol_sensitivity.py`
+当前仓库没有 Sobol scaffold。可按 [SALib 官方采样与分析接口](https://salib.readthedocs.io/en/latest/)建立任务专用脚本，记录参数分布、采样器、样本矩阵摘要、样本量、随机种子、分析器与置信区间，并将运行产物绑定回执。
