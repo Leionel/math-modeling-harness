@@ -54,8 +54,8 @@ def _claim_test_errors(model: Mapping[str, Any], plan: Mapping[str, Any]) -> lis
             tested.setdefault(claim_id, []).append(claim_test)
     for claim_id, rows in tested.items():
         roles = {row.get("case_role") for row in rows}
-        if roles != {"supporting", "counterexample"}:
-            errors.append(f"claim {claim_id} requires supporting and counterexample validation obligations")
+        if len(rows) != 2 or roles != {"supporting", "counterexample"}:
+            errors.append(f"claim {claim_id} requires exactly one supporting and one counterexample validation obligation")
         if len({row.get("optimization_variable") for row in rows}) != 1:
             errors.append(f"claim {claim_id} microcases must use one optimization variable")
         input_cases = {json.dumps(row.get("input_case"), ensure_ascii=False, sort_keys=True) for row in rows}

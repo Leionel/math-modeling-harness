@@ -66,9 +66,17 @@ class ClaimMicrocasesTest(unittest.TestCase):
         pair[1]["claim_test"]["input_case"] = pair[0]["claim_test"]["input_case"]
         self.assertIn("distinct input_case", _claim_test_errors(model, plan)[0])
         model["models"][0]["validation_obligations"].pop()
-        self.assertIn("requires supporting and counterexample", _claim_test_errors(model, plan)[0])
+        self.assertIn("requires exactly one supporting", _claim_test_errors(model, plan)[0])
         model["models"][0]["validation_obligations"][0]["claim_test"]["claim_id"] = "C-UNKNOWN"
         self.assertIn("unknown claim_id", _claim_test_errors(model, plan)[0])
+
+    def test_extra_supporting_case_is_not_a_valid_pair(self) -> None:
+        model, plan, _ = self.fixture()
+        extra = deepcopy(model["models"][0]["validation_obligations"][0])
+        extra["obligation_id"] = "OB-SUPPORT-2"
+        extra["claim_test"]["input_case"] = {"actual": 10, "planned": 8}
+        model["models"][0]["validation_obligations"].append(extra)
+        self.assertIn("exactly one supporting", _claim_test_errors(model, plan)[0])
 
 
 if __name__ == "__main__":
