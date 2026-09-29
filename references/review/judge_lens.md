@@ -28,6 +28,11 @@ paper plan、model contract、frozen results、presentation contract，以及
 11. figure/table 与 narrative 是否一致（图说与正文结论矛盾记 high）。
 12. 明显的 competition-review 风险（超页风险、模板违规迹象、AI 声明缺失迹象）。
 
+对多问题论文，在实际渲染页中逐问找“可执行方案/结果/解释/建议”；若主答案
+藏在长证明或调试过程之后，指出页码与读者需要寻找的答案。区分可执行策略、
+启发式实验和事后全知下界的版面标签；不可把草稿诊断或未核验的页数规则当作
+官方评审判定。
+
 ## 边界
 
 - 默认 issue-only：只输出 findings，不打分。

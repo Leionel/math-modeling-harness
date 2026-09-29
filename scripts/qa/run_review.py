@@ -36,6 +36,7 @@ from runtime_state import RuntimeStateError, load_runtime_state  # noqa: E402
 from project_layout import resolve_control_path, resolve_manifest_path  # noqa: E402
 from redaction import redact_text  # noqa: E402
 from v2_gate_runtime import _v2_dag_nodes, _v2_role_entries, _v2_role_path  # noqa: E402
+from qa.tex_source import load_tex_source  # noqa: E402
 try:  # Package import in tests versus direct script execution.
     from qa.review_evidence import (  # type: ignore  # noqa: E402
         REVIEW_DIR, REVIEW_MODE_LEVEL, evaluate_w2_review, required_perspectives,
@@ -140,6 +141,7 @@ def build_bundle(
         if isinstance(node.get("path"), str)
     }
     seen: set[tuple[str, Path]] = set()
+    source_dependencies: list[dict[str, str]] = []
     role_order = () if perspectives == ["human_prose"] else BUNDLE_ALLOW_ROLES
     for role in role_order:
         for item_index, (candidate, path) in enumerate(_v2_role_entries(state, role), start=1):
@@ -160,6 +162,18 @@ def build_bundle(
                 "path": destination.name,
                 "sha256": sha256_file(destination),
             })
+            if role == "paper" and path.suffix.casefold() == ".tex":
+                source = load_tex_source(path, root)
+                context = bundle_dir / f"paper-source-context-{item_index}.tex"
+                context.write_text(source.text, encoding="utf-8")
+                files.append({
+                    "role": "paper_source_context", "artifact_id": None,
+                    "path": context.name, "sha256": sha256_file(context),
+                })
+                source_dependencies.extend(
+                    {"path": rel_path(source_path, root), "sha256": sha256_file(source_path)}
+                    for source_path in source.files
+                )
     rules = root / "rules.txt"
     if rules.is_file() and perspectives != ["human_prose"]:
         destination = bundle_dir / "rules_ref.txt"
@@ -215,6 +229,8 @@ def build_bundle(
         },
         "files": files,
     }
+    if source_dependencies:
+        manifest["source_dependencies"] = source_dependencies
     if context_policy is not None:
         manifest["focus_section"] = focus_section
         manifest["context_policy"] = context_policy

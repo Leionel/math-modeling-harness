@@ -41,6 +41,12 @@ deterministic PASS/FAIL 来替代确定性 checker。
     constraint semantics、leakage、validation sufficiency、baseline 比较与
     unsupported optimality / causal overclaim 的结论边界。
 
+对高影响的“最优/必须/单调”结论，进一步核对求导或比较的变量与论文结论是否一致；
+局部成本式是否足以推出联合优化结论；额外信息是否可以被策略忽略；KKT 或等价
+推导是否遗漏约束活跃性和可行域前提。给出能定位的源行、反例或缺失前提；
+启发式数值观察不能被当作一般性定理。若判断需要重跑模型代码，使用既有
+`requires_external_check` 标记，不能凭 bundle 自称已经复算。
+
 ## 回执格式
 
 只输出符合 `review_report.schema.json` 的正式报告，不使用另一个简化回执。

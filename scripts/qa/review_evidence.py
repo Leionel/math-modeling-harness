@@ -93,6 +93,7 @@ BUNDLE_ALLOW_ROLES = frozenset({
     "paper_plan", "abstract", "paper", "conclusion", "presentation_contract",
     "writer_package", "pdf", "figure", "table", "rules_ref", "judge_scan_structural",
     "writing_spine", "section_brief", "paper_section", "reverse_outline", "human_prose_statistics",
+    "paper_source_context",
 })
 # Roles that, if found inside a bundle, prove the information boundary was
 # broken and void any L1+ independence claim.
@@ -475,11 +476,52 @@ def review_freshness(report: Mapping[str, Any], root: Path) -> tuple[str, list[s
         if isinstance(node_digest, str) and node_digest.lower() != str(ref.get("sha256", "")).lower():
             errors.append(f"reviewed_artifacts[{index}] does not match the canonical DAG digest")
             current = False
+    source_errors = _source_dependency_freshness(report, root)
+    errors.extend(source_errors)
+    current = current and not source_errors
     if perspective == "human_prose":
         context_errors = _human_context_freshness(report, root)
         errors.extend(context_errors)
         current = current and not context_errors
     return ("current" if current else "stale"), errors
+
+
+def _source_dependency_freshness(report: Mapping[str, Any], root: Path) -> list[str]:
+    """A TeX child that changed after review invalidates its source snapshot."""
+
+    bundle_ref = report.get("bundle_ref")
+    if not isinstance(bundle_ref, Mapping):
+        return []
+    bundle_path = resolve_path(str(bundle_ref.get("path", "")), root).resolve()
+    try:
+        bundle_path.relative_to(root)
+    except ValueError:
+        return ["review bundle manifest escapes project root"]
+    if not bundle_path.is_file() or sha256_file(bundle_path) != bundle_ref.get("sha256"):
+        return ["review bundle manifest is missing or changed"]
+    try:
+        manifest = load_structured(bundle_path)
+    except (OSError, ValueError, TypeError) as exc:
+        return [f"cannot inspect review source dependencies: {exc}"]
+    if not isinstance(manifest, Mapping):
+        return ["review bundle manifest must be an object"]
+    rows = manifest.get("source_dependencies", [])
+    if not isinstance(rows, list):
+        return ["review source_dependencies must be an array"]
+    errors: list[str] = []
+    for row in rows:
+        if not isinstance(row, Mapping) or not isinstance(row.get("path"), str) or not isinstance(row.get("sha256"), str):
+            errors.append("review source dependency has no path or digest")
+            continue
+        path = resolve_path(row["path"], root).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError:
+            errors.append(f"review source dependency escapes project root: {row['path']}")
+            continue
+        if not path.is_file() or sha256_file(path) != row["sha256"]:
+            errors.append(f"review source dependency changed since review: {row['path']}")
+    return errors
 
 
 def _human_context_freshness(report: Mapping[str, Any], root: Path) -> list[str]:
