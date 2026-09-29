@@ -148,6 +148,30 @@ class CheckpointAndDiffTest(unittest.TestCase):
         self.assertIn("no longer matches", str(caught.exception))
         self.assertFalse((Path(self.temp.name) / "fork-never").exists())
 
+    def test_fork_rejects_checkpoint_path_outside_project(self) -> None:
+        project = self.clone_demo("fork-path-source")
+        checkpoints.create_checkpoint(project, "base")
+        outside_source = Path(self.temp.name) / "payload.txt"
+        outside_source.write_text("source bytes", encoding="utf-8")
+        checkpoint_file = checkpoints.checkpoint_path(project, "base")
+        document = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+        document["files"]["../payload.txt"] = sha256(outside_source)
+        checkpoint_file.write_text(json.dumps(document), encoding="utf-8")
+        destination = Path(self.temp.name) / "fork-path-output" / "child"
+        destination.parent.mkdir()
+        outside_target = destination.parent / "payload.txt"
+        outside_target.write_text("keep me", encoding="utf-8")
+
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "checkpoints.py"), "fork",
+             "--project-root", str(project), "--name", "base", "--output", str(destination)],
+            text=True, capture_output=True, encoding="utf-8", errors="replace", check=False,
+        )
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("escapes project root", completed.stderr)
+        self.assertEqual(outside_target.read_text(encoding="utf-8"), "keep me")
+        self.assertFalse(destination.exists())
+
     def test_fork_refuses_a_non_empty_destination(self) -> None:
         project = self.clone_demo("fork-occupied")
         checkpoints.create_checkpoint(project, "base")

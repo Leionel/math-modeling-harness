@@ -41,12 +41,25 @@ def _validate_name(name: str) -> str:
     return name
 
 
+def _checkpoint_file(root: Path, relative: str) -> Path:
+    path = Path(relative)
+    if path.is_absolute():
+        raise ValueError(f"checkpoint file path must be relative: {relative}")
+    resolved = (root / path).resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise ValueError(f"checkpoint file path escapes project root: {relative}") from exc
+    return resolved
+
+
 def _snapshot_files(root: Path, state: Any) -> dict[str, str]:
     """Map every file the run depends on to its digest, relative to the root."""
 
     files: dict[str, str] = {}
 
     def record(path: Path) -> None:
+        path = _checkpoint_file(root, rel_path(path, root))
         relative = rel_path(path, root)
         if relative in files:
             return
@@ -133,7 +146,11 @@ def verify_checkpoint(root: Path, name: str) -> tuple[bool, list[str]]:
     document = load_checkpoint(root, name)
     errors: list[str] = []
     for relative, expected in sorted(document["files"].items()):
-        path = (root / relative).resolve()
+        try:
+            path = _checkpoint_file(root, relative)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
         if not path.is_file():
             errors.append(f"missing file: {relative}")
             continue
@@ -179,10 +196,13 @@ def fork_project(
         )
     if destination.exists() and any(destination.iterdir()) and not force:
         raise ValueError(f"refusing to fork into a non-empty destination: {destination}")
+    paths = {
+        relative: (_checkpoint_file(root, relative), _checkpoint_file(destination, relative))
+        for relative in document["files"]
+    }
     destination.mkdir(parents=True, exist_ok=True)
-    for relative in sorted(document["files"]):
-        source = (root / relative).resolve()
-        target = destination / relative
+    for relative in sorted(paths):
+        source, target = paths[relative]
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(source.read_bytes())
     copied = {
