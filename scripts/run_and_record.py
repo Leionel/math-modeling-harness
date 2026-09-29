@@ -293,6 +293,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     mode, policy_rule = _v2_policy(args, manifest_path, root)
     if args.timeout is not None and args.timeout < 1:
         raise ValueError("--timeout must be a positive number of seconds")
+    timeout_seconds = args.timeout if args.timeout is not None else 900
     coverage_declared = bool(args.covers_model or args.covers_question or args.covers_contract_item)
     if coverage_declared and args.stage != "smoke":
         raise ValueError("--covers-* arguments are only valid for a smoke receipt")
@@ -349,7 +350,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     try:
         result = subprocess.run(
             argv, cwd=str(command_cwd), text=True, capture_output=True,
-            encoding="utf-8", errors="replace", check=False, timeout=args.timeout,
+            encoding="utf-8", errors="replace", check=False, timeout=timeout_seconds,
         )
         exit_code = result.returncode
         stdout, stderr = result.stdout or "", result.stderr or ""
@@ -377,7 +378,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
         "input_refs": input_refs, "output_refs": output_refs,
         "selection": {"selected": selected, "policy": policy_rule} if selected else {"selected": False},
         "env_note": "environment inherited from parent process; not captured",
-        "metadata": {"integrity_mode": mode, "io_hashes_bound": hash_io},
+        "metadata": {"integrity_mode": mode, "io_hashes_bound": hash_io, "timeout_seconds": timeout_seconds},
     }
     if args.note:
         receipt["metadata"]["note"] = args.note
@@ -399,7 +400,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
         receipt["generation"] = generation
     receipt["execution_host_identity"] = execution_host_identity()
     if timed_out:
-        receipt["metadata"].update({"outcome": "failed", "failure_reason": "timeout", "timeout_seconds": args.timeout})
+        receipt["metadata"].update({"outcome": "failed", "failure_reason": "timeout"})
         if missing_outputs:
             receipt["metadata"]["missing_outputs"] = missing_outputs
     elif missing_outputs:
@@ -420,7 +421,7 @@ def _run_v2(args: argparse.Namespace, root: Path, manifest_path: Path | None, ar
     if timed_out:
         print(json.dumps({"ok": False, "command_id": command_id, "receipt_id": receipt_id,
                           "exit_code": None, "receipt": str(receipt_path), "index_entry": bool(args.index),
-                          "errors": [f"command timed out after {args.timeout} seconds"]}, ensure_ascii=False))
+                          "errors": [f"command timed out after {timeout_seconds} seconds"]}, ensure_ascii=False))
         return 124
     if missing_outputs:
         print(json.dumps({"ok": False, "command_id": command_id, "receipt_id": receipt_id, "exit_code": exit_code,

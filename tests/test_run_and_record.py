@@ -166,6 +166,18 @@ class RunAndRecordTest(unittest.TestCase):
             _, invalid_errors, _ = _validate_document(receipt_path, ROOT / "schemas" / "command_receipt.schema.json")
             self.assertTrue(invalid_errors)
 
+    def test_v2_default_time_limit_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="math-run-record-default-timeout-") as temp:
+            project = Path(temp)
+            result = self._run(
+                "--run-id", "run-bounded", "--stage", "smoke", "--v2",
+                "--receipt", "receipts/bounded.json", "--", sys.executable, "-c", "print('ok')",
+                cwd=project,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            receipt = json.loads((project / "receipts" / "bounded.json").read_text(encoding="utf-8"))
+            self.assertEqual(receipt["metadata"]["timeout_seconds"], 900)
+
 
 if __name__ == "__main__":
     unittest.main()
