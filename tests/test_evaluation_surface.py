@@ -57,6 +57,26 @@ class AblationSurfaceTest(unittest.TestCase):
                 ablation.run(partial)
             self.assertIn("missing conditions", str(raised.exception))
 
+    def test_score_cli_rejects_three_empty_run_logs(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp:
+            results = Path(temp)
+            for name in ablation.CONDITIONS:
+                condition = results / name
+                condition.mkdir()
+                (condition / "run_log.json").write_text(
+                    json.dumps({"target_stage": "F1", "runs": []}), encoding="utf-8",
+                )
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "evaluation" / "ablation.py"),
+                 "score", "--results-dir", str(results), "--json"],
+                text=True, capture_output=True, encoding="utf-8", errors="replace", check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("expected 12 runs", completed.stderr)
+            self.assertNotIn('"status": "RUN"', completed.stdout)
+
 
 class RedTeamSurfaceTest(unittest.TestCase):
     def test_every_scenario_declares_an_expected_outcome(self) -> None:

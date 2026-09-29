@@ -52,6 +52,15 @@ Efficiency: `tool_calls`, `wall_clock_seconds`, `input_tokens`,
 
 Token counts come from provider logs, never from an estimate.
 
+The scoring CLI requires a complete 4-task × 3-repeat matrix in each
+condition's `run_log.json`. Each run records `task_id`, `repeat` (1–3),
+`reached_stage`, `wall_clock_seconds`, `input_tokens`, `output_tokens`, and
+`tool_calls`; the log declares `target_stage`. All three conditions must use
+the same four task IDs. Empty or incomplete logs are rejected before `RUN` is
+reported. A complete log structure alone does not establish that backend runs
+or independent reliability probes occurred; keep those raw records with the
+report before making a capability claim.
+
 ## Scoring rules
 
 - A condition may not score its own reliability. The probes run against its

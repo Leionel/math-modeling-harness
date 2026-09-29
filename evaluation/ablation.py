@@ -1,10 +1,8 @@
 """A/B/C ablation runner skeleton.
 
 Pre-registered in ``evaluation/PREREGISTRATION.md`` before any result existed.
-This file can launch the three conditions and score their outputs, but it
-refuses to publish a number it did not observe: without real backend runs,
-interaction logs and a filled budget manifest, ``run()`` returns
-``status: NOT_RUN`` and writes no results file.
+This file declares the three conditions and scores supplied run logs. It does
+not launch a backend. An incomplete pre-registered run matrix is rejected.
 
 That refusal is the point. The repository rule is that a plan, a demo or a
 green regression suite must never be presented as a capability benchmark, so
@@ -83,24 +81,45 @@ def budget_manifest() -> dict[str, object]:
 
 
 def score(condition_dir: Path) -> dict[str, object]:
-    """Score one condition run from its own logs and final project state."""
+    """Score one complete condition matrix from its run log."""
 
     manifest_path = condition_dir / "run_log.json"
     if not manifest_path.is_file():
         raise SystemExit(f"missing run log: {manifest_path}")
     log = json.loads(manifest_path.read_text(encoding="utf-8"))
-    timings = [float(row.get("wall_clock_seconds", 0.0)) for row in log.get("runs", [])]
+    runs = log.get("runs")
+    if not isinstance(runs, list) or len(runs) != 12:
+        raise SystemExit(f"incomplete ablation run matrix in {manifest_path}: expected 12 runs")
+    repeats: dict[str, set[int]] = {}
+    for row in runs:
+        if not isinstance(row, dict) or not isinstance(row.get("task_id"), str) or not row["task_id"]:
+            raise SystemExit(f"ablation run is missing task_id in {manifest_path}")
+        repeat = row.get("repeat")
+        if type(repeat) is not int or repeat not in (1, 2, 3):
+            raise SystemExit(f"ablation run has invalid repeat in {manifest_path}")
+        task_repeats = repeats.setdefault(row["task_id"], set())
+        if repeat in task_repeats:
+            raise SystemExit(f"duplicate task/repeat in {manifest_path}: {row['task_id']} {repeat}")
+        task_repeats.add(repeat)
+        if any(metric not in row for metric in ("reached_stage", "wall_clock_seconds", "input_tokens", "output_tokens", "tool_calls")):
+            raise SystemExit(f"ablation run has missing metrics in {manifest_path}")
+    if len(repeats) != 4 or any(values != {1, 2, 3} for values in repeats.values()):
+        raise SystemExit(f"incomplete task/repeat coverage in {manifest_path}")
+    if not isinstance(log.get("target_stage"), str) or not log["target_stage"]:
+        raise SystemExit(f"ablation target_stage is missing in {manifest_path}")
+    timings = [float(row["wall_clock_seconds"]) for row in runs]
     return {
         "condition": condition_dir.name,
-        "runs": len(log.get("runs", [])),
+        "runs": len(runs),
+        "task_ids": sorted(repeats),
         "end_to_end_completion_rate": (
-            sum(1 for row in log.get("runs", []) if row.get("reached_stage") == log.get("target_stage"))
-            / max(len(log.get("runs", [])), 1)
+            sum(1 for row in runs if row["reached_stage"] == log["target_stage"])
+            / len(runs)
         ),
-        "wall_clock_seconds": statistics.fmean(timings) if timings else 0.0,
-        "input_tokens": sum(int(row.get("input_tokens", 0)) for row in log.get("runs", [])),
-        "output_tokens": sum(int(row.get("output_tokens", 0)) for row in log.get("runs", [])),
-        "tool_calls": sum(int(row.get("tool_calls", 0)) for row in log.get("runs", [])),
+        "wall_clock_seconds": statistics.fmean(timings),
+        "input_tokens": sum(int(row["input_tokens"]) for row in runs),
+        "output_tokens": sum(int(row["output_tokens"]) for row in runs),
+        "tool_calls": sum(int(row["tool_calls"]) for row in runs),
     }
 
 
@@ -123,12 +142,13 @@ def run(results_dir: Path | None) -> dict[str, object]:
     }
     if results_dir is None:
         return pre
-    conditions = {}
-    for child in sorted(path for path in results_dir.iterdir() if path.is_dir()):
-        conditions[child.name] = score(child)
-    missing = sorted(set(CONDITIONS) - set(conditions))
+    missing = sorted(name for name in CONDITIONS if not (results_dir / name).is_dir())
     if missing:
         raise SystemExit(f"ablation results are incomplete; missing conditions: {missing}")
+    conditions = {name: score(results_dir / name) for name in CONDITIONS}
+    task_sets = {tuple(row["task_ids"]) for row in conditions.values()}
+    if len(task_sets) != 1:
+        raise SystemExit("ablation conditions do not share the same task set")
     return {
         "status": "RUN",
         "conditions": conditions,
