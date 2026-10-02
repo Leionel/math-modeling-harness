@@ -116,4 +116,3 @@ failure; it cannot infer READY from an empty response. Deprecated v1 status is
 `BLOCKED`, `PENDING_HUMAN`, or `READY`; these describe observed evidence, not
 mathematical correctness. Gate blockers retain their `failures_summary` gate
 identity. Current Gate work takes priority over future human checkpoints.
-
