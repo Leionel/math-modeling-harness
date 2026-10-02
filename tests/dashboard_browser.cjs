@@ -37,7 +37,7 @@ const path = require("node:path");
       .click();
     assert.match(
       await page.evaluate(() => navigator.clipboard.readText()),
-      /harness check M1 --project/,
+      /harness'? '?check'? '?M1'? '?--project/,
     );
     for (const nav of [
       "题目与模型",
