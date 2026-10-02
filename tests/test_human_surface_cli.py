@@ -85,6 +85,19 @@ class HumanSurfaceCliTest(unittest.TestCase):
         self.assertEqual(guideline["location"], "harness")
         self.assertTrue(guideline["exists"])
 
+    def test_model_facade_names_machine_source_without_claiming_review_readiness(self) -> None:
+        self.init()
+        result = self.run_cli("model", "--project", str(self.project), "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["structured_source"], ".harness/authoring/model_contract.yaml")
+        self.assertTrue((self.project / payload["structured_source"]).is_file())
+        self.assertIn(str(self.project.resolve()), payload["compile_argv"])
+        self.assertNotIn("ready for review", payload["checkpoint"]["message"])
+        human = self.run_cli("model", "--project", str(self.project))
+        self.assertIn(payload["structured_source"], human.stdout)
+        self.assertIn("does not establish model readiness", human.stdout)
+
     def test_pptx_figure_copy_preserves_existing_edits_and_drawio_is_explicit(self) -> None:
         self.init()
         first = self.run_cli(

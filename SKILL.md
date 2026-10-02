@@ -46,7 +46,9 @@ Python experiment with no evidence or competition-delivery obligations.
     artifacts. `00_PROJECT_BRIEF.md`, `01_RESEARCH_NOTES.md`,
     `02_MODEL_DECISION.md`, `03_SOLUTION_REPORT.md`, and `paper/` are the
     human authoring surface and must never be overwritten by `prepare`.
-11. Treat author Markdown as the source for COMPILE artifacts. Use the explicit
+11. Write reasoning in author Markdown and structured compiler input in
+    `.harness/authoring/*.yaml`. Existing fenced Markdown sources remain a
+    legacy input; follow the command's reported source path. Use the explicit
     `research/model/solve/paper plan/figure --compile` commands only when a
     machine consumer needs IR; never hand-edit those generated JSON files. A
     compile creates IR, not research evidence or a Gate result.

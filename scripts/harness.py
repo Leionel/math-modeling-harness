@@ -691,14 +691,25 @@ def _model(args: argparse.Namespace) -> int:
             "human_surface": ensure_human_surface(root),
             "read": "01_RESEARCH_NOTES.md",
             "authoring_target": "02_MODEL_DECISION.md",
+            "structured_source": ".harness/authoring/model_contract.yaml",
+            "compile_argv": ["harness", "model", "--project", str(root), "--compile"],
             "checkpoint": {
-                "message": "Model selection ready for review. Check candidate coverage, selected-model rationale, inter-question dependencies, and the validation plan.",
+                "message": "Authoring template prepared. Fill candidate coverage, selected-model rationale, inter-question dependencies, and the validation plan before requesting review.",
                 "actions": ["continue", "revise", "research-more"],
                 "gate": "m1",
             },
             "compile_hint": "When a machine consumer needs the decision, fill `.harness/authoring/model_contract.yaml` and run `harness model --compile`.",
         }
-    _emit(result, machine=args.json, human="model authoring surface ready\nread: 01_RESEARCH_NOTES.md\nwrite: 02_MODEL_DECISION.md")
+    human = (
+        f"model contract compiled\nsource: {result.get('source')}\noutput: {result.get('output')}"
+        if args.compile else
+        "model authoring template prepared\nread: 01_RESEARCH_NOTES.md\n"
+        "write rationale: 02_MODEL_DECISION.md\n"
+        "write machine source: .harness/authoring/model_contract.yaml\n"
+        "next: harness model --project '<PROJECT_ROOT>' --compile\n"
+        "template creation does not establish model readiness"
+    )
+    _emit(result, machine=args.json, human=human)
     return 0
 
 

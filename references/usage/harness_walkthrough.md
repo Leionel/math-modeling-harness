@@ -33,9 +33,10 @@ python scripts/harness.py doctor --project <项目根目录> --offline --json
 python scripts/harness.py init --project <项目根目录> --competition cumcm --preset research
 ```
 
-`init` 只写四个控制文件:`run_manifest.json`(v2 控制面)、`competition_profile.json`、
-`artifact_dag.json`、`run_index.json`。它不生成任何 Gate 结论,也不留下会让你误当成
-证据的占位文件。
+`init` 写四个控制 JSON：`run_manifest.json`、`competition_profile.json`、
+`artifact_dag.json`、`run_index.json`，并建立作者 Markdown、结构化 YAML 模板与工作目录。
+模板不代表研究完成，也不是 Gate 结论。先在 Markdown 解释决策，再填
+`.harness/authoring/*.yaml` 并用对应 `--compile` 生成机器契约；不要手改生成的 JSON。
 
 三个 preset 是**能力集合**,不是难度档位:
 
@@ -54,8 +55,8 @@ preset 可以收紧某个 Gate 的要求,但**永远关不掉**这几样:安全�
 | 拆成实现任务 | `harness solve --project <ROOT> --tasks` | 从契约投影出来的任务清单 |
 | 真的跑一次 | `harness execute --project <ROOT> --stage smoke -- <命令>` | 一条回执:argv、cwd、退出码、时间戳 |
 | 覆盖契约条目 | 同上,加 `--covers-model` / `--covers-question` / `--covers-contract-item` | P1/P2 能核验的覆盖率 |
-| 冻结数字 | `harness freeze --project <ROOT> --kind results --source <文件>` | 绑定到**被选中回执**的冻结结果 |
-| 起草论文 | `harness paper plan --project <ROOT>`,再 `harness figure --project <ROOT>` | 论文计划、分节草稿、图约 |
+| 冻结数字 | 见下方完整参数示例 | 绑定到**被选中回执**的冻结结果 |
+| 起草论文 | `harness paper plan --project <ROOT>`,再 `harness figure FIG-01 --project <ROOT>` | 论文计划、分节草稿、图约 |
 | 草稿诊断 | `harness paper audit --project <ROOT> --tex paper/main.tex --pdf paper/main.pdf --log paper/main.log --plan .harness/contracts/paper_plan.json --json` | 只读的 TeX/PDF 问题清单，`gate_effect=none` |
 | 评审 | `harness review --project <ROOT> --semantic` | `reports/review/*.json`,带结论和独立性等级 |
 | 重算某个 Gate | `harness check --project <ROOT> W1` | 结论,或者"为什么没有结论" |
@@ -63,6 +64,13 @@ preset 可以收紧某个 Gate 的要求,但**永远关不掉**这几样:安全�
 | 提交包检查 | `harness submit check --project <ROOT>` | S1 的事实性结论 |
 
 有两条规矩值得在第一次运行之前就记住,因为它们决定了你为什么要这样用工具。
+
+结果冻结的参数示例如下（路径与 run id 必须替换为本次真实执行产生的值；不是可直接
+执行的演示数据）。验证报告必须来自独立验证，选中回执必须已存在：
+
+```powershell
+harness freeze --project '<ROOT>' --kind results --source '<RESULTS_JSON>' --output '<FROZEN_RESULTS_JSON>' --run-id '<RUN_ID>' --model-contract '<MODEL_CONTRACT_JSON>' --code '<SOLVER_FILE>' --validation '<VALIDATION_JSON>' --receipt '<FULL_RECEIPT_JSON>' --manifest '<ACTIVE_MANIFEST_JSON>'
+```
 
 **没有回执的数字,进不了冻结结果。** `freeze` 不会替你编造一次执行,它只绑定到一条
 已经存在的回执上。想验证"当时真的跑过",用 `harness reproduce <回执.json>`:它按回执里
@@ -146,8 +154,10 @@ python dashboard/server.py --project <ROOT> --port 8765
 产物谱系、回执、评审。它没有写入路径——`POST` 一律回 405,并告诉你该跑哪条生产者
 命令。可服务的根目录由 `DASHBOARD_ALLOWED_ROOTS` 限制。
 
-页面右上角可以暂停刷新、切换深浅版面、切换中英文。中文界面用思源宋体,和论文排印
-习惯一致;但**阻塞信息、`next_action`、各种 id 一律保持 Harness 输出的原文**,不翻译
+侧栏按当前工作、模型、实验、论文和成果组织页面；详情栏显示原因、生产者和依赖。
+成果中心可筛选、搜索、下载已登记的项目内文件，并按需预览 PDF/栅格图。
+登记数不代表文件已经生成或验收通过。未登记文件不展示；缺失文件返回 404。
+页面右上角可以暂停刷新、切换主题和中英文；**阻塞信息、`next_action`、各种 id 保持 Harness 输出的原文**,不翻译
 ——把证据改写成另一种语言,等于往证据里塞它没说过的话。
 
 ## Harness 不会替你做的事
