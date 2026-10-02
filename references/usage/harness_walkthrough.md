@@ -26,6 +26,8 @@ python scripts/harness.py doctor --project <项目根目录> --offline --json
 
 `doctor` 报告的是 Harness **实际能用到**的东西:解释器、可选后端、当前 preset 的要求。
 它不联网下载任何东西,`--offline` 就是把这件事说在明面上。
+普通输出显示解释器路径、当前缺项与处理动作。加 `--stage M1` 聚焦当前阶段；
+`--verbose` 展开后续或可选工具。未指定阶段时保留基础能力检查，不代表所有 Gate 可运行。
 
 ## 开一个 run
 

@@ -8,6 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import sys
+import io
+import json
+from contextlib import redirect_stdout
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -34,6 +37,33 @@ def _command(name: str, status: str = "available") -> dict:
 
 
 class DoctorStageTest(unittest.TestCase):
+    def test_cli_prints_interpreter_and_repair_for_current_dependency(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="doctor cli ") as temp, patch.object(doctor_core, "probe_dependency", side_effect=lambda name: _dependency(name, "missing" if name == "yaml" else "available")), patch.object(doctor_core, "probe_command", side_effect=self._probe_command):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = harness.main(["doctor", "--project", temp, "--stage", "M1", "--offline"])
+            self.assertEqual(code, 1)
+            text = output.getvalue()
+            self.assertIn(sys.executable, text)
+            self.assertIn("PyYAML", text)
+            self.assertIn("当前阶段缺项: yaml", text)
+            self.assertNotIn("必需: latexmk", text)
+            self.assertNotIn("configure it", text)
+            self.assertIn(str(Path(temp).resolve()), text)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = harness.main(["doctor", "--project", temp, "--stage", "M1", "--json"])
+            self.assertEqual(code, 1)
+            self.assertFalse(json.loads(output.getvalue())["ok"])
+
+    def test_cli_verbose_lists_later_tools_without_blocking_m1(self) -> None:
+        with tempfile.TemporaryDirectory() as temp, patch.object(doctor_core, "probe_dependency", side_effect=self._probe_dependency), patch.object(doctor_core, "probe_command", side_effect=self._probe_command):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = harness.main(["doctor", "--project", temp, "--stage", "M1", "--verbose"])
+            self.assertEqual(code, 0)
+            self.assertIn("后续/可选: latexmk", output.getvalue())
+
     def _probe_dependency(self, name: str) -> dict:
         return _dependency(name)
 

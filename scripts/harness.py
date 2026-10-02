@@ -56,7 +56,7 @@ from views.setup_card import build_setup_card  # noqa: E402
 from precedents.select_reference_cards import select_cards  # noqa: E402
 from qa.plan_selective_rerun import plan_selective_rerun  # noqa: E402
 from qa.paper_audit import audit_paper  # noqa: E402
-from doctor_core import STAGES as DOCTOR_STAGES, evaluate_capabilities  # noqa: E402
+from doctor_core import STAGES as DOCTOR_STAGES, evaluate_capabilities, format_capability_report  # noqa: E402
 from gate_order import GATE_ORDER  # noqa: E402
 
 
@@ -1081,7 +1081,7 @@ def _doctor(args: argparse.Namespace) -> int:
     report["errors"] = errors
     report["warnings"] = warnings
     report["ok"] = not errors
-    _emit(report, machine=args.json, human=f"doctor: {'OK' if report['ok'] else 'BLOCKED'}\npython: {sys.version.split()[0]}\nschemas: {report['schema_count']}\nstage: {args.stage or 'all'}\noptional warnings: {len(warnings)}")
+    _emit(report, machine=args.json, human=format_capability_report(report, verbose=args.verbose))
     return 0 if report["ok"] else 1
 
 
@@ -1503,6 +1503,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", help="check Python, optional dependencies, schemas, and critical files")
     _add_common(doctor)
     doctor.add_argument("--offline", action="store_true", help="reserved compatibility flag; does not download anything")
+    doctor.add_argument("--verbose", action="store_true", help="show missing capabilities for later stages and optional routes")
     doctor.add_argument("--stage", choices=DOCTOR_STAGES, help="report only the capabilities required by one workflow stage")
     doctor.set_defaults(handler=_doctor)
 

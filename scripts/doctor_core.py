@@ -13,6 +13,7 @@ from importlib import metadata
 import shutil
 import subprocess
 import sys
+import shlex
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -285,7 +286,50 @@ def evaluate_capabilities(
     }
 
 
+def format_capability_report(report: Mapping[str, Any], *, verbose: bool = False) -> str:
+    """Render existing probe facts without changing their verdict or stage."""
+    stage = report.get("stage")
+    python = report["python"]
+    lines = [
+        f"doctor: {'OK' if report['ok'] else 'BLOCKED'}",
+        f"Python: {python['path']} ({python['version']})",
+        f"检查阶段: {stage or '未指定（基础能力检查）'}；不是 Gate 判定",
+    ]
+    for error in report.get("errors", []):
+        lines.append(f"错误: {error}")
+    missing = (report["stages"].get(stage) or {}).get("missing", [])
+    lines.append("当前阶段缺项: " + (", ".join(missing) if missing else "无" if stage else "未选择阶段"))
+    for row in report["capabilities"]:
+        if row["status"] == "available":
+            continue
+        required = row["name"] in missing or row["name"] in {"yaml", "jsonschema"}
+        if required or verbose:
+            lines.append(f"{'必需' if required else '后续/可选'}: {row['name']} ({row.get('source', '')})")
+            guidance = str(row.get("guidance") or "")
+            if row["name"] in {"yaml", "jsonschema"}:
+                package = "PyYAML" if row["name"] == "yaml" else "jsonschema"
+                argv = [str(python["path"]), "-m", "pip", "install", package]
+                command = "& " + " ".join("'" + value.replace("'", "''") + "'" for value in argv) if sys.platform == "win32" else shlex.join(argv)
+                guidance = command
+            if guidance:
+                lines.append(f"  处理: {guidance}")
+    if stage:
+        for group in report["stages"][stage].get("alternative_capabilities", []):
+            if "one of: " + ", ".join(group) in missing:
+                lines.append("处理: 按当前论文模板安装一种 TeX 引擎: " + ", ".join(group))
+    optional = [row for row in report["capabilities"] if row["status"] != "available" and row["name"] not in missing and row["name"] not in {"yaml", "jsonschema"}]
+    if not verbose:
+        lines.append(f"后续/可选缺项: {len(optional)}；使用 --verbose 查看")
+    argv = ["harness", "doctor", "--project", str(report["project_root"]), "--offline"]
+    if stage:
+        argv.extend(["--stage", str(stage)])
+    command = " ".join("'" + value.replace("'", "''") + "'" for value in argv) if sys.platform == "win32" else shlex.join(argv)
+    # PowerShell needs the invocation operator when the executable is quoted.
+    lines.append("复查: " + ("& " if sys.platform == "win32" else "") + command)
+    return "\n".join(lines)
+
+
 __all__ = [
     "COMMANDS", "LEGACY_STRICT_COMMANDS", "STAGES", "STAGE_REQUIREMENTS", "evaluate_capabilities",
-    "probe_command", "probe_dependency",
+    "probe_command", "probe_dependency", "format_capability_report",
 ]
