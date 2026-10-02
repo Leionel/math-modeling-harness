@@ -1,156 +1,97 @@
-# Dashboard design
+# Read-only modeling workspace
 
-Position: an **observability console**, not an operator surface. It is closer to
-an MLflow run page than to a CI dashboard — its job is to make one Harness run
-legible, and to make a false claim in that run impossible to hide.
+The dashboard organizes existing Harness evidence into current work, execution
+records and deliverables. It uses no framework, bundler or frontend dependency.
 
-```text
-python dashboard/server.py --project <ROOT> --port 8765
-        │
-        ├── GET /                static console (no build step, no dependency)
-        ├── GET /api/snapshot    one recomputed view, assembled below
-        └── POST /*              405, always
-        │
-        ▼
-snapshot(root)
-   ├── mcp:get_run_state     stage · gate_status · blockers · next actions
-   ├── mcp:list_artifacts    every DAG node with recomputed freshness
-   ├── run_index.json + receipts/*.json     execution facts
-   ├── reports/review/*.json                review evidence
-   └── run_manifest.json                    preset, checkpoints, AI ledger
+```powershell
+python dashboard/server.py --project '<PROJECT_ROOT>' --port 8765
 ```
 
-## Why it reads through MCP
+## Layout and tasks
 
-The console calls the same tools an external agent calls
-(`docs/MCP_ARCHITECTURE.md`). There is one read path, so a human staring at the
-dashboard and an agent calling `get_run_state` cannot see different worlds.
-`snapshot()["sources"]` names them, and the console test asserts at least one
-`mcp:` source is present.
+The left navigation contains Overview, Problem & models, Runs & reviews,
+Paper & figures, Deliverables and Environment & sources. The central column
+shows the selected task; the inspector shows diagnostics, full receipt/review
+records, or an artifact's producer, receipt, lifecycle, freshness and dependencies.
+Dependencies can be selected to inspect their actual registered records.
 
-The console narrows the MCP fail-closed root allowlist to the single project it
-was started with (`_narrow_mcp_roots`). If `MATH_HARNESS_ALLOWED_ROOTS` is
-already configured, the served project must fall inside it; otherwise the
-console refuses. `DASHBOARD_ALLOWED_ROOTS` adds a second, operator-level check
-at `serve()` time.
+Overview prioritizes the first blocked Gate. Later pending human checkpoints
+remain visible separately, without suggesting they should be approved now.
+The six recomputable Gates have human-readable stage labels. S0/F1 remain
+boundary entries in the machine snapshot; neither is counted as a checked Gate.
+Copied check commands include the actual project root and use PowerShell literal
+quoting. Diagnostic messages remain the exact Harness output, in either language.
 
-## What it shows
+Deliverables filters registered artifacts into paper, figures, code/evidence and
+submission materials; it also supports path/role/id search. These are display
+categories, not new artifact roles or verdicts. Counts mean **registered**, not
+generated, validated or frozen. The inspector shows lifecycle and freshness
+separately. A current seed profile is not a verified competition rule set.
 
-**Gate strip.** `S0 … F1`, each `passed`, `blocked`, `locked` or `boundary`.
-S0 and F1 are marked `boundary` because `harness check` only accepts M1, P1, P2,
-W1, W2 and S1 — rendering them as "locked" would imply a pending Gate that no
-code can recompute. Each Gate also shows whether a human checkpoint exists.
-
-**Blockers with the repair action.** `failures_summary` items already carry a
-`next_action`; the console shows message and action together, because an
-operator's real question is "what do I run now".
-
-**Run timeline.** Executions and reviews merged and sorted by their recorded
-timestamps, each row colored by the receipt's exit code or the report's verdict.
-This is the "agents can fail and the Harness stopped it" view.
-
-**Artifact lineage.** An SVG layout computed from `artifact_dag.json`
-dependencies at request time: layered columns, node = role + id, red border when
-freshness is not `current`. No React Flow and no bundler: a console that needs
-`npm install` before an interviewer can look at it is a console that will not be
-looked at.
-
-**Receipts and reviews.** Receipt id, stage, whether it is the selected one, its
-exit code and argv; review perspective, independence level, verdict and finding
-count. Independence is drawn as four pips because `L0_same_context` through
-`L3_human` is an ordinal scale, and the console's job is to make the gap between
-"L0" and "L2" visible without reading a spec.
-
-## Sheet system
-
-Two surfaces, chosen by the `auto / light / dark` button and remembered in
-`localStorage`: a cool paper sheet and a deep slate sheet. Both carry the same
-state hues, lifted for contrast in dark rather than swapped, so a passed Gate is
-the same fact on either surface. `auto` follows `prefers-color-scheme`; a judge
-who never touches the button sees the sheet their own system asked for.
-
-Interface language switches between English and Chinese the same way. Only
-interface text is translated: blocker messages, `next_action` strings, artifact
-roles, ids and enums stay exactly as the Harness emitted them, because
-paraphrasing evidence text would put words in it that the evidence does not say.
-Chinese sets the interface roles in Noto Serif SC (Source Han Serif) with a
-Latin-and-Han single family, which is the typeface convention of the paper this
-Harness audits; technical tokens stay in the mono role at every language.
-
-Type roles are three: a DIN-derived condensed face for Gate ids and the verdict
-word, a text face for prose, and a mono face for every identifier, path, exit
-code and timestamp (tabular figures). Spacing is a 4px scale; hierarchy comes
-from the surface ladder (`field` → `panel` → `chip`) plus 2px ink rules, not from
-shadows. The focus ring is its own blue token, never the failure red — in a
-console where red means "this claim was refuted", red on focus would be a lie.
-
-The graph paper is confined to the artifact-lineage canvas, where it is the
-plotting field rather than wallpaper. The gate chain is the signature device:
-S0 and F1 render as hatched open ends because no checker recomputes them, and a
-connector is solid only when both of its endpoints passed, so the break in the
-chain sits exactly where the Harness actually stopped.
-
-`@media print` forces the paper sheet and drops the controls, because this page
-is evidence people will hand to another person.
-
-### Client-only controls
-
-`pause`, the theme button and the language button change only what this browser
-renders. None of them sends a request the console could not have sent before,
-and `POST` is still refused with 405. `pause` exists because the 5-second poll
-otherwise re-renders the page under someone who is mid-sentence copying a
-blocker.
-
-## What it does not do
-
-There is no approve button, and that is load-bearing.
+## Read path and error handling
 
 ```text
-POST /api/approve → 405
-{ "error": "the console is read-only by design",
-  "why":   "a Gate PASS, freeze, receipt or human decision must come from a
-            producer command or a control-state record, never from a dashboard button",
-  "instead": "harness check <GATE> · harness freeze · harness ai verify · harness review" }
+GET /                         static UI
+GET /api/snapshot             recomputed MCP state + artifact list + recorded trace
+GET /api/artifact?id=ID        actual registered in-root artifact bytes
+GET /api/artifact?id=ID&download=1   attachment
+POST /*                       405
 ```
 
-Two reasons, both grounded in measurements rather than taste:
+State comes from `get_run_state`; artifact identity and freshness come from
+`list_artifacts`. Trace records come from the run index, receipts, reviews and
+manifest. The snapshot names these sources. ERROR, legacy or unavailable state
+makes all Gate cells unknown. A failed HTTP refresh shows an error and explicitly
+labels the retained snapshot as previous data. No failed fetch can imply READY.
 
-1. **A verdict cannot be granted by a view.** Every Gate is recomputed from
-   files at read time; a button that "approves" would either call a producer
-   command (then it is a thin client, fine) or write state itself (then it is a
-   bypass). The first version refuses to be ambiguous about which.
-2. **Human identity is not attested today.** `evaluation/redteam.py` runs the
-   `fabricated_human_checkpoint` scenario and records its real outcome: dropping
-   a W1 checkpoint fails the Gate, and re-adding one under an arbitrary
-   `decided_by` passes it. Shipping a friendly "Approve freeze" button on top of
-   an unattested field would advertise a control that does not exist.
+Only a registered artifact id can select a file. The server resolves the path
+and checks project-root containment, including symlink resolution, at request
+time. Unregistered and missing files return 404; escaping files return 403.
+PDF and raster images may be previewed; HTML, SVG and other types download as
+octet-stream with nosniff and sandbox headers. The page loads previews only when
+requested and reports missing-file errors. It does not execute project code.
 
-### What would make an approval path acceptable
+`MATH_HARNESS_ALLOWED_ROOTS` constrains MCP access. If absent, the dashboard
+narrows it to the explicit served project. `DASHBOARD_ALLOWED_ROOTS`, when set,
+adds a startup allowlist. The default bind address is loopback.
 
-Two of the four now hold, and they are what makes an operator mode honest rather
-than a shortcut: the write goes through `harness checkpoint approve`, and the ledger
-is append-only and hash-linked per entry. Each decision also carries `actor_class`,
-and a Gate that needs a human counts only `human` rows — so an agent driving an
-`auto` run cannot clear a human Gate silently; it has to claim a human was there,
-which is the same lie the next bullet is about.
+## Visual and interaction rules
 
-Still open:
+Neutral white surfaces, blue actions, sans-serif Chinese text, mono paths and
+subtle borders replace the previous graph-paper layout. Dark, light and system
+themes and Chinese/English preferences persist in localStorage. Keyboard focus
+is visible; small screens stack the inspector below the work area. Navigation
+scrolls horizontally on narrow screens. No decorative animation is required.
 
-- the record binds an identity the Harness can check (a pre-shared role key, or
-  an external identity token) instead of a free-text `decided_by`;
-- `scenario_human_checkpoint_is_unattested` flips from `expected: allowed` to
-  `expected: blocked` in the same change that closes identity — the suite fails if
-  the docs and the code disagree. Its counterpart
-  `scenario_agent_checkpoint_cannot_clear_a_human_gate` already asserts `blocked`.
+Polling runs every ten seconds, pausing while an item is selected to preserve
+reading/preview state. Manual refresh is always available; Pause only stops
+automatic refresh. These controls do not write project state.
 
-## Testing
+## Truth boundaries and remaining work
 
-`tests/test_dashboard.py` asserts the properties, not the pixels:
+There is no approve, freeze or execution button. Auto is an operator authorization
+declaration, not proof that a background executor is running. Human checkpoint
+actor identity remains self-declared; see `THREAT_MODEL.md`.
 
-- the snapshot reports `read_only`, recomputes the blocked Gate, and labels S0/F1
-  as `boundary`;
-- `/` and `/api/snapshot` serve; unknown routes 404;
-- **serving does not mutate the project** — a SHA-256 over the whole tree must be
-  identical before and after;
-- `POST` returns 405 with the producer command to use instead;
-- `serve()` exits 2 when the project is outside `DASHBOARD_ALLOWED_ROOTS`.
+Question-level deliverable summaries require explicit problem/model/validation/
+paper links. This iteration does not guess these from filenames or create new
+claim evidence. Unregistered PDFs or figures are intentionally absent. Artifact
+freshness alone proves neither mathematical correctness nor acceptance. Browser
+automation is not an unfamiliar-user usability study.
+
+## Verification
+
+`python -m unittest tests.test_dashboard tests.test_state_projection -q` verifies
+status error projection, real HTTP outcomes, file containment, active content
+handling and read-only snapshots. `tests/dashboard_browser.cjs` is an optional
+Playwright regression against a disposable initialized project:
+
+```text
+node tests/dashboard_browser.cjs http://127.0.0.1:8765 <SCREENSHOT_DIRECTORY>
+```
+
+Make Playwright available through NODE_PATH; `PLAYWRIGHT_CHANNEL=msedge` selects
+an installed Edge browser. It covers navigation, inspector, search, filters,
+clipboard, theme/language cycles, pause, narrow-screen overflow, connection
+failure and status ERROR. Synthetic failures are test inputs, never project
+evidence. Screenshots need separate visual inspection.

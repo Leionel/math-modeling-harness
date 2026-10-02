@@ -1,578 +1,936 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Harness Console</title>
-<style>
-  :root {
-    /* light sheet: ink on graph paper */
-    --lt-field: #e9eae6; --lt-panel: #f6f7f4; --lt-chip: #eceee8; --lt-node: #fdfdfb; --lt-ink: #181d24;
-    --lt-dim: #69737f; --lt-rule: #c6cbd0;
-    --lt-grid: rgba(24, 29, 36, .055); --lt-grid-major: rgba(24, 29, 36, .09);
-    --lt-verified: #12674e; --lt-refuted: #c02a1e; --lt-human: #a66a00; --lt-idle: #8d959e;
-    --lt-focus: #1f5fbf;
-    --lt-tint: rgba(18, 103, 78, .07); --lt-alert: rgba(192, 42, 30, .2);
-    /* deep slate sheet: same hues lifted for contrast, never pure black */
-    --dk-field: #1b2027; --dk-panel: #222831; --dk-chip: #2c333d; --dk-node: #262d37; --dk-ink: #dfe4ea;
-    --dk-dim: #95a1b0; --dk-rule: #3b4450;
-    --dk-grid: rgba(223, 228, 234, .04); --dk-grid-major: rgba(223, 228, 234, .07);
-    --dk-verified: #57bd8b; --dk-refuted: #f2705f; --dk-human: #d9a441; --dk-idle: #6d7986;
-    --dk-focus: #9dc1f5;
-    --dk-tint: rgba(87, 189, 139, .1); --dk-alert: rgba(242, 112, 95, .22);
-
-    /* 4px scale; hierarchy comes from surface lift, not from shadow */
-    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
-    --maxw: 1440px;
-
-    color-scheme: light;
-    --field: var(--lt-field); --panel: var(--lt-panel); --chip: var(--lt-chip); --node: var(--lt-node);
-    --ink: var(--lt-ink); --dim: var(--lt-dim); --rule: var(--lt-rule);
-    --grid: var(--lt-grid); --grid-major: var(--lt-grid-major);
-    --verified: var(--lt-verified); --refuted: var(--lt-refuted); --human: var(--lt-human);
-    --idle: var(--lt-idle); --tint: var(--lt-tint); --alert: var(--lt-alert); --focus: var(--lt-focus);
-    --edge: var(--lt-ink);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --field: var(--dk-field); --panel: var(--dk-panel); --chip: var(--dk-chip); --node: var(--dk-node);
-      --ink: var(--dk-ink); --dim: var(--dk-dim); --rule: var(--dk-rule);
-      --grid: var(--dk-grid); --grid-major: var(--dk-grid-major);
-      --verified: var(--dk-verified); --refuted: var(--dk-refuted); --human: var(--dk-human);
-      --idle: var(--dk-idle); --tint: var(--dk-tint); --alert: var(--dk-alert); --focus: var(--dk-focus);
-      --edge: #5b6673;
-    }
-  }
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --field: var(--dk-field); --panel: var(--dk-panel); --chip: var(--dk-chip); --node: var(--dk-node);
-    --ink: var(--dk-ink); --dim: var(--dk-dim); --rule: var(--dk-rule);
-    --grid: var(--dk-grid); --grid-major: var(--dk-grid-major);
-    --verified: var(--dk-verified); --refuted: var(--dk-refuted); --human: var(--dk-human);
-    --idle: var(--dk-idle); --tint: var(--dk-tint); --alert: var(--dk-alert); --focus: var(--dk-focus);
-    --edge: #5b6673;
-  }
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; color: var(--ink); font: 14px/1.5 var(--body); background: var(--field); }
-  :root {
-    --display: "Bahnschrift SemiCondensed", "Bahnschrift", "DIN Condensed", "Oswald",
-               "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
-    --body: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI",
-            "PingFang SC", "Microsoft YaHei", sans-serif;
-    --mono: "Cascadia Mono", "Cascadia Code", ui-monospace, SFMono-Regular, Menlo,
-            Consolas, "Lucida Console", "Microsoft YaHei Mono", monospace;
-    --ui: var(--display);
-  }
-  /* Chinese sheet: Source Han / Noto Serif SC, one family for Latin and Han so the
-     two never mismatch. Technical strings (ids, paths, enums) stay in --mono. */
-  html[lang="zh"] {
-    --body: "Noto Serif SC", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC",
-            SimSun, serif;
-    --ui: var(--body);
-  }
-  html[lang="zh"] body { line-height: 1.78; }
-  html[lang="zh"] h1 { letter-spacing: .3em; }
-  html[lang="zh"] h2 { font-size: 12px; letter-spacing: .22em; }
-  html[lang="zh"] th { font-size: 11px; letter-spacing: .16em; }
-  html[lang="zh"] ol.timeline .k { font-size: 11px; letter-spacing: .16em; }
-  html[lang="zh"] .railkey, html[lang="zh"] .note, html[lang="zh"] .key { font-size: 12.5px; }
-  html[lang="zh"] #vcmd { font-size: 14px; }
-  html[lang="zh"] .spec { font-size: 12px; }
-  html[lang="zh"] .fact { font-size: 13px; }
-  .mast { border-bottom: 2px solid var(--edge); padding: var(--s4) max(var(--s5), calc((100% - var(--maxw)) / 2)) var(--s5); }
-  .mast-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s3) var(--s4); }
-  h1 { margin: 0; font: 600 13px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; }
-  .spec { font: 11px/1.4 var(--mono); color: var(--dim); border-left: 1px solid var(--rule); padding-left: var(--s4); }
-  .tools { margin-left: auto; display: flex; align-items: center; gap: var(--s2); }
-  .tools button {
-    font: 11px/1 var(--mono); color: var(--ink); background: var(--panel); min-height: 28px;
-    border: 1px solid var(--rule); border-radius: 2px; padding: var(--s2) var(--s3); cursor: pointer;
-  }
-  .tools button:hover { border-color: var(--ink); }
-  .tools button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .beat { width: 7px; height: 7px; border-radius: 50%; background: var(--verified); }
-  .tools.paused .beat { background: var(--idle); }
-  .ago { font: 11px/1 var(--mono); color: var(--dim); }
-
-  .verdict { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s1) var(--s5); margin: var(--s6) 0 var(--s1); }
-  #vword { font: 600 clamp(42px, 8.5vw, 86px)/.84 var(--display); letter-spacing: -.035em; margin: 0; text-transform: uppercase; }
-  #vword.BLOCKED { color: var(--refuted); }
-  #vword.PENDING_HUMAN { color: var(--human); }
-  #vword.READY { color: var(--verified); }
-  .verdict-facts { display: grid; gap: var(--s1); padding-bottom: var(--s2); }
-  .fact { font: 12px/1.4 var(--mono); color: var(--dim); white-space: nowrap; }
-  .fact b { color: var(--ink); font-weight: 500; }
-  #vcmd { padding: var(--s1) 0 var(--s3); font: 13px/1.5 var(--body); color: var(--dim); }
-
-  .rail { display: flex; align-items: flex-start; padding-top: var(--s1); }
-  .conn { flex: 0 1 26px; height: 2px; margin-top: 5px; min-width: 8px; background: var(--idle); }
-  .conn.solid { background: var(--verified); }
-  .conn.open { background: repeating-linear-gradient(90deg, var(--idle) 0 4px, transparent 4px 9px); }
-  .conn.broken { background: linear-gradient(90deg, var(--verified) 0 34%, transparent 34% 66%, var(--refuted) 66% 100%); }
-  .conn.boundary { background: repeating-linear-gradient(90deg, var(--rule) 0 3px, transparent 3px 8px); }
-  .stop { flex: 1 1 0; min-width: 0; text-align: center; }
-  .stop i { display: block; width: 12px; height: 12px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--idle); background: var(--field); }
-  .stop.passed i { border-color: var(--verified); background: var(--verified); }
-  .stop.blocked i { border-color: var(--refuted); background: var(--field); box-shadow: 0 0 0 3px var(--alert); }
-  .stop.boundary i {
-    border-color: var(--rule); border-style: dashed; border-radius: 1px;
-    background: repeating-linear-gradient(45deg, var(--rule) 0 1px, transparent 1px 4px);
-  }
-  .stop b { display: block; font: 600 17px/1.25 var(--display); letter-spacing: .04em; margin-top: var(--s2); }
-  .stop.blocked b { color: var(--refuted); }
-  .stop span.s { display: block; font: 600 9.5px/1.6 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
-  .stop span.h { display: block; font: 9.5px/1.4 var(--mono); color: var(--verified); }
-  .stop span.h.wait { color: var(--human); }
-  .stop span.h.by-agent { color: var(--human); }
-  .railkey { margin-top: var(--s4); font: 11.5px/1.6 var(--body); color: var(--dim); }
-
-  main { padding: var(--s5) max(var(--s5), calc((100% - var(--maxw)) / 2)) var(--s7); display: grid; gap: var(--s4); }
-  .two { display: grid; gap: var(--s4); grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
-  section {
-    background: var(--panel); border: 1px solid var(--rule); border-top: 2px solid var(--edge);
-    border-radius: 0 0 2px 2px; padding: var(--s3) var(--s4) var(--s4); min-width: 0;
-  }
-  h2 { font: 600 11px/1.8 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 var(--s2); }
-  ul.blockers { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); }
-  ul.blockers li { display: grid; grid-template-columns: 32px 1fr; gap: var(--s2); align-items: start; }
-  ul.blockers .g { font: 600 13px/1.8 var(--display); letter-spacing: .04em; color: var(--refuted); }
-  ul.blockers .m { font-size: 13.5px; }
-  ul.blockers .a { display: block; font: 12px/1.6 var(--mono); color: var(--dim); }
-  .clear { color: var(--verified); font-size: 13.5px; }
-  .none { color: var(--dim); font-size: 13px; }
-  code { font-family: var(--mono); color: var(--ink); }
-  .note { font-size: 11.5px/1.6 var(--body); color: var(--dim); margin-top: var(--s3); }
-
-  .src { display: flex; flex-wrap: wrap; gap: var(--s2); }
-  .src span { font: 11px/1.6 var(--mono); color: var(--dim); border: 1px solid var(--rule); padding: 1px var(--s2); border-radius: 2px; background: var(--chip); }
-  .src span.live { color: var(--ink); border-color: var(--ink); }
-
-  ol.timeline { list-style: none; margin: 0; padding: 0 0 0 3px; }
-  ol.timeline li { display: grid; grid-template-columns: 2px 1fr; gap: var(--s3); }
-  ol.timeline .spine { background: var(--rule); }
-  ol.timeline .body { padding: 0 0 var(--s3); }
-  ol.timeline li:last-child .body { padding-bottom: 2px; }
-  ol.timeline .k { font: 600 10px/1.8 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
-  ol.timeline .k time { font-family: var(--mono); letter-spacing: 0; text-transform: none; font-size: 11px; }
-  ol.timeline .l { font-size: 13.5px; }
-  ol.timeline .l .mark { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--verified); }
-  ol.timeline li.bad .l .mark { background: var(--refuted); }
-  ol.timeline li.mode .l .mark { background: var(--field); border: 1.5px solid var(--idle); width: 6px; height: 6px; }
-  ol.timeline .d { font: 11.5px/1.5 var(--mono); color: var(--dim); word-break: break-all; }
-
-  /* the only place the graph paper belongs: the plotting field under the DAG */
-  .dagbox {
-    overflow-x: auto; border: 1px solid var(--rule); border-radius: 2px; padding: var(--s2);
-    background-color: var(--field);
-    background-image:
-      repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 8px),
-      repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 8px),
-      repeating-linear-gradient(90deg, var(--grid-major) 0 1px, transparent 1px 40px),
-      repeating-linear-gradient(0deg, var(--grid-major) 0 1px, transparent 1px 40px);
-  }
-  .dagbox svg text { font-family: var(--mono); font-size: 10px; fill: var(--dim); }
-  .dagbox svg text.role { font-family: var(--display); font-size: 12.5px; font-weight: 600; letter-spacing: .03em; fill: var(--ink); }
-  .dagbox line { stroke: var(--rule); stroke-width: 1; }
-  .dagbox marker path { fill: var(--rule); }
-  .dagbox rect { fill: var(--node); stroke-width: 1.3; }
-  .dagbox rect.current { stroke: var(--verified); }
-  .dagbox rect.stale { stroke: var(--refuted); }
-  .dagbox rect.stale + text { fill: var(--refuted); }
-  .dagbox rect.not_run { stroke: var(--dim); stroke-dasharray: 3 3; }
-  .key { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-top: var(--s3); font: 11.5px/1.4 var(--body); color: var(--dim); }
-  .key i { display: inline-block; width: 9px; height: 9px; border: 1.5px solid var(--verified); margin-right: 5px; vertical-align: -1px; background: var(--node); }
-  .key .k2 i { border-color: var(--refuted); }
-  .key .k3 i { border-style: dashed; border-color: var(--dim); }
-
-  .scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  th {
-    text-align: left; font: 600 10px/1.8 var(--ui); letter-spacing: .08em; text-transform: uppercase;
-    color: var(--dim); padding: 0 var(--s3) var(--s1) 0; border-bottom: 1px solid var(--edge); white-space: nowrap;
-  }
-  td { padding: var(--s2) var(--s3) var(--s2) 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  tbody tr:last-child td { border-bottom: 0; }
-  td.id { font: 11.5px/1.5 var(--mono); }
-  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  tr.chosen { background: var(--tint); }
-  tr.chosen td:first-child { box-shadow: inset 2px 0 0 var(--verified); }
-  .pill { font: 600 9.5px/1.6 var(--ui); letter-spacing: .06em; text-transform: uppercase; background: var(--chip); border-radius: 999px; padding: 1px var(--s2); white-space: nowrap; }
-  .pass { color: var(--verified); } .fail { color: var(--refuted); }
-  .pips { letter-spacing: .16em; font-size: 11px; color: var(--verified); }
-  .pips .off { color: var(--rule); }
-
-  @keyframes settle { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-  .mast .verdict { animation: settle .5s ease-out both; }
-  .mast .rail { animation: settle .5s ease-out .12s both; }
-  .chg { animation: flash 1.1s ease-out 1; }
-  @keyframes flash { 0% { background: var(--alert); } 100% { background: transparent; } }
-  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-  @media (pointer: coarse) {
-    .tools button { min-height: 40px; padding: var(--s3) var(--s4); }
-  }
-  @media (max-width: 640px) {
-    #vword { font-size: clamp(38px, 13vw, 56px); }
-    .spec { border-left: 0; padding-left: 0; flex-basis: 100%; }
-    .stop b { font-size: 14px; }
-    .stop span.h { display: none; }
-    .two { grid-template-columns: 1fr; }
-  }
-  @media print {
-    :root, :root[data-theme="dark"] {
-      color-scheme: light;
-      --field: #fff; --panel: #fff; --chip: #f1f1ee; --node: #fff; --ink: #181d24; --dim: #555;
-      --rule: #999; --grid: rgba(24, 29, 36, .05); --grid-major: rgba(24, 29, 36, .08);
-      --verified: #12674e; --refuted: #c02a1e; --human: #a66a00; --idle: #8d959e;
-      --tint: transparent; --alert: rgba(192, 42, 30, .2); --edge: #181d24;
-    }
-    .tools, .note { display: none; }
-    section { break-inside: avoid; }
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-</style>
-</head>
-<body>
-<header class="mast">
-  <div class="mast-top">
-    <h1 data-i18n="title">Harness Console</h1>
-    <div class="spec" data-i18n="spec">read-only · no write path · every number below recomputed at request time</div>
-    <div class="tools" id="tools">
-      <span class="beat"></span><span class="ago" id="ago">loading&hellip;</span>
-      <button id="toggle" type="button" aria-label="Pause live recomputation">pause</button>
-      <button id="theme" type="button" aria-label="Switch to the dark sheet">dark</button>
-      <button id="lang" type="button" lang="zh" aria-label="切换到中文界面">中文</button>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Harness Console · 数模工作台</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fafafa;
+        --panel: #fff;
+        --soft: #f3f5f8;
+        --ink: #202938;
+        --muted: #647083;
+        --line: #e3e7ed;
+        --blue: #2563eb;
+        --green: #17734d;
+        --red: #b73737;
+        --amber: #91620c;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #141922;
+        --panel: #1b222d;
+        --soft: #252e3b;
+        --ink: #e7ecf5;
+        --muted: #a7b3c5;
+        --line: #354151;
+        --blue: #8bb3ff;
+        --green: #6bd5a1;
+        --red: #ff9393;
+        --amber: #e7bf69;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.65 "Segoe UI Variable",
+          "Segoe UI",
+          "Microsoft YaHei",
+          sans-serif;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 7px 12px;
+        color: var(--ink);
+      }
+      button:hover {
+        background: var(--soft);
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid var(--blue);
+        outline-offset: 3px;
+      }
+      a {
+        color: var(--blue);
+      }
+      code,
+      pre {
+        font:
+          12px/1.65 Consolas,
+          monospace;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 26px;
+        line-height: 1.4;
+        font-weight: 650;
+      }
+      h2 {
+        font-size: 17px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .small {
+        font-size: 12px;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 208px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+      .sidebar {
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        padding: 28px 18px;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+      .brand {
+        font-size: 18px;
+        font-weight: 650;
+      }
+      .brand small {
+        display: block;
+        font-weight: 400;
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        color: var(--muted);
+      }
+      #project {
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .nav {
+        display: grid;
+        gap: 6px;
+      }
+      .nav button {
+        text-align: left;
+        border-color: transparent;
+        padding: 11px 14px;
+      }
+      .nav button[aria-current="page"] {
+        color: var(--blue);
+        background: var(--soft);
+        font-weight: 600;
+      }
+      .sidebar footer {
+        margin-top: auto;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding: 17px 30px;
+        background: var(--panel);
+        gap: 12px;
+      }
+      .tools {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 26px;
+        padding: 32px;
+        max-width: 1600px;
+        margin: auto;
+      }
+      .main {
+        min-width: 0;
+      }
+      .inspector {
+        min-width: 0;
+        border-left: 1px solid var(--line);
+        padding-left: 24px;
+      }
+      .inspector h2 {
+        margin-bottom: 20px;
+      }
+      .inspector dt {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 18px;
+      }
+      .inspector dd {
+        margin: 4px 0;
+        overflow-wrap: anywhere;
+      }
+      .page-head {
+        margin-bottom: 24px;
+      }
+      .eyebrow {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 5px;
+        background: var(--soft);
+        color: var(--muted);
+      }
+      .passed,
+      .current {
+        color: var(--green);
+      }
+      .blocked,
+      .ERROR,
+      .stale {
+        color: var(--red);
+      }
+      .rail {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+        margin: 20px 0 26px;
+      }
+      .step {
+        border-top: 3px solid var(--line);
+        padding: 9px 4px;
+        min-width: 0;
+      }
+      .step.passed {
+        border-color: var(--green);
+      }
+      .step.blocked {
+        border-color: var(--amber);
+        color: var(--amber);
+      }
+      .step b {
+        display: block;
+        font-size: 13px;
+      }
+      .step small {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .action {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--blue);
+        border-radius: 9px;
+        padding: 24px;
+        margin-bottom: 28px;
+      }
+      .action p {
+        margin: 12px 0 18px;
+        overflow-wrap: anywhere;
+      }
+      .primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: var(--panel);
+      }
+      .primary:hover {
+        opacity: 0.88;
+        background: var(--blue);
+      }
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 20px 0 12px;
+        gap: 12px;
+      }
+      .rows {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+      .row {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-radius: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 16px 18px;
+        background: transparent;
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .row[aria-pressed="true"] {
+        background: var(--soft);
+        box-shadow: inset 3px 0 var(--blue);
+      }
+      .row-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .row p {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 5px;
+        overflow-wrap: anywhere;
+      }
+      .empty {
+        padding: 28px;
+        border: 1px dashed var(--line);
+        border-radius: 9px;
+        color: var(--muted);
+        background: var(--panel);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 24px 0;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--panel);
+        text-align: left;
+      }
+      .card strong {
+        display: block;
+        font-size: 23px;
+        margin: 6px 0;
+      }
+      .card[aria-pressed="true"] {
+        border-color: var(--blue);
+      }
+      .search {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .search input {
+        width: 100%;
+        min-width: 0;
+        background: var(--panel);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 9px 12px;
+      }
+      .preview {
+        margin-top: 18px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 16px;
+      }
+      .preview img {
+        display: block;
+        max-width: 100%;
+        max-height: 500px;
+        margin: 16px auto;
+      }
+      .preview iframe {
+        width: 100%;
+        height: 560px;
+        border: 0;
+        margin-top: 16px;
+      }
+      .error-banner {
+        border: 1px solid var(--red);
+        border-radius: 7px;
+        color: var(--red);
+        padding: 16px;
+        margin-bottom: 20px;
+        overflow-wrap: anywhere;
+      }
+      details {
+        margin-top: 24px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .links {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      #notice {
+        min-height: 20px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #connection {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #content {
+        overflow-wrap: anywhere;
+      }
+      @media (max-width: 1150px) {
+        .workspace {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 24px;
+        }
+        .inspector {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding: 24px 0;
+        }
+        .cards {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 700px) {
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .shell > div {
+          min-width: 0;
+        }
+        .sidebar {
+          min-width: 0;
+        }
+        .sidebar {
+          position: static;
+          height: auto;
+          padding: 16px;
+          gap: 14px;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .nav {
+          display: flex;
+          overflow-x: auto;
+        }
+        .nav button {
+          white-space: nowrap;
+        }
+        .sidebar footer,
+        #project {
+          display: none;
+        }
+        .topbar {
+          padding: 12px 16px;
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .workspace {
+          padding: 20px 16px;
+        }
+        .rail {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .cards {
+          gap: 8px;
+        }
+        .action {
+          padding: 18px;
+        }
+        .preview iframe {
+          height: 400px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand" id="brand"></div>
+        <div id="project"></div>
+        <nav class="nav" id="nav" aria-label="Workspace"></nav>
+        <footer class="small muted" id="readonly"></footer>
+      </aside>
+      <div>
+        <header class="topbar">
+          <span id="breadcrumb"></span>
+          <div class="tools">
+            <span id="connection" role="status"></span
+            ><button id="refresh"></button><button id="pause"></button
+            ><button id="theme"></button><button id="lang"></button>
+          </div>
+        </header>
+        <div class="workspace">
+          <main class="main">
+            <div id="error" role="alert"></div>
+            <div id="content"></div>
+            <div id="notice" role="status"></div>
+          </main>
+          <aside class="inspector" id="inspector" aria-label="Details"></aside>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="verdict">
-    <div id="vword">&mdash;</div>
-    <div class="verdict-facts" id="vfacts"></div>
-  </div>
-  <div id="vcmd"></div>
-  <div class="rail" id="rail" role="img" aria-label="Gate chain"></div>
-  <div class="railkey" id="railkey"></div>
-</header>
-<main>
-  <section><h2 data-i18n="blocking">What is blocking this run</h2><ul class="blockers" id="blockers"></ul></section>
-  <section><h2 data-i18n="sources">Where these facts come from</h2><div class="src" id="sources"></div>
-    <div class="note" data-i18n="sourcesNote">The console calls the same MCP tools an external agent calls, so a human reading this page
-      and an agent calling <code>get_run_state</code> cannot see different worlds.</div></section>
-  <div class="two">
-    <section><h2 data-i18n="runs">Runs &amp; reviews</h2><ol class="timeline" id="timeline"></ol></section>
-    <section><h2 data-i18n="lineage">Artifact lineage</h2><div class="dagbox" id="dag"></div>
-      <div class="key">
-        <span class="k1"><i></i><span data-i18n="current">current</span></span>
-        <span class="k2"><i></i><span data-i18n="stale">stale</span></span>
-        <span class="k3"><i></i><span data-i18n="notrun">not run</span></span>
-        <span data-i18n="lineageNote">layout from <code>artifact_dag.json</code>; freshness from a digest recomputed now, not the stored field</span>
-      </div></section>
-  </div>
-  <section><h2 data-i18n="receipts">Receipts</h2><div class="scroll"><table id="receipts"></table></div></section>
-  <section><h2 data-i18n="reviewEvidence">Review evidence</h2><div class="scroll"><table id="reviews"></table></div></section>
-</main>
-<script>
-const el = (id) => document.getElementById(id);
-const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-let paused = false, lastSeen = "", lastFetch = 0, lastData = null;
-
-/* Only interface text is translated. Blocker messages, next_action strings, ids,
-   roles and enums are Harness output: paraphrasing them would put words in the
-   evidence that the evidence does not say. */
-const S = {
-  title: ["Harness Console", "Harness 控制台"],
-  spec: ["read-only · no write path · every number below recomputed at request time",
-    "只读 · 无写入路径 · 下方每个数字都在请求时重新计算"],
-  pause: ["pause", "暂停"], resume: ["resume", "继续"],
-  ago: [(s) => `recomputed ${s}s ago`, (s) => `${s} 秒前重算`],
-  paused: ["paused", "已暂停"],
-  light: ["light", "浅色"], dark: ["dark", "深色"], auto: ["auto", "跟随"],
-  toSheet: [(n) => `Switch to the ${n} sheet`, (n) => `切换到${n}版面`],
-  toLang: ["切换到中文界面", "Switch to the English sheet"],
-  blocking: ["What is blocking this run", "本次运行的阻塞项"],
-  clear: ["Nothing is blocking this run.", "没有任何项阻塞本次运行。"],
-  next: ["next:", "下一步:"],
-  sources: ["Where these facts come from", "这些事实的来源"],
-  sourcesNote: ["The console calls the same MCP tools an external agent calls, so a human reading this page and an agent calling <code>get_run_state</code> cannot see different worlds.",
-    "本控制台调用与外部 Agent 完全相同的 MCP 工具,因此页面上看到的状态,与 Agent 调用 <code>get_run_state</code> 得到的结果不可能出现分歧。"],
-  runs: ["Runs &amp; reviews", "执行与评审"],
-  lineage: ["Artifact lineage", "产物谱系"],
-  current: ["current", "最新"], stale: ["stale", "已过期"], notrun: ["not run", "未生成"],
-  lineageNote: ["layout from <code>artifact_dag.json</code>; freshness from a digest recomputed now, not the stored field",
-    "布局取自 <code>artifact_dag.json</code>;新鲜度来自本次请求重算的摘要,而非文件中记录的字段"],
-  receipts: ["Receipts", "执行回执"],
-  reviewEvidence: ["Review evidence", "评审证据"],
-  th: [["receipt", "stage", "selected", "exit", "duration"], ["回执", "阶段", "选用", "退出码", "耗时"]],
-  th2: [["perspective", "independence", "verdict", "findings", "at"], ["视角", "独立性", "结论", "发现数", "时间"]],
-  used: ["used", "选用"], failed: ["failed", "失败"],
-  emptyReceipts: ["No receipts yet. <code>harness execute</code> writes one per recorded command.",
-    "尚无回执。<code>harness execute</code> 会为每条被记录的命令生成一份。"],
-  emptyReviews: ["No review reports yet. <code>harness review</code> writes reports/review/*.json.",
-    "尚无评审报告。<code>harness review</code> 会写入 reports/review/*.json。"],
-  emptyTimeline: ["Nothing has executed yet. Record one with <code>harness execute &lt;command&gt;</code>.",
-    "尚未执行任何命令。用 <code>harness execute &lt;命令&gt;</code> 记录一次。"],
-  emptyDag: ["No artifacts declared yet. <code>harness init</code> seeds the DAG.",
-    "尚未声明任何产物。<code>harness init</code> 会建立 DAG。"],
-  execution: ["execution", "执行"], review: ["review", "评审"], mode: ["mode", "模式变更"],
-  modeWord: ["mode", "模式"], modeUnset: ["operator mode not declared", "未声明运行模式"],
-  agentWord: ["agent", "Agent"],
-  passed: ["passed", "通过"], blocked: ["受阻", "受阻"], locked: ["not yet passed", "尚未通过"], boundary: ["boundary", "边界"],
-  human: ["human", "人工"], noCheckpoint: ["no checkpoint", "无人工确认"], needsHuman: ["needs human", "待人工确认"],
-  railKey: ["S0 and F1 are boundary stages, drawn as open ends: <code>harness check</code> accepts M1, P1, P2, W1, W2 and S1, so no code recomputes them. A connector is solid only when both of its gates passed.",
-    "S0 与 F1 是边界阶段,画成开放端点:<code>harness check</code> 只接受 M1、P1、P2、W1、W2 与 S1,没有任何代码会重算它们。只有两端都通过的连接线才画成实线。"],
-  staleN: [(n) => `${n} stale artifact(s).`, (n) => `${n} 个产物已过期。`],
-  pendingHuman: [(s) => `Human checkpoint pending on ${s}.`, (s) => `${s} 等待人工确认。`],
-  stopsAt: ["chain stops at", "证据链停在"], chainClear: ["chain recomputed clear", "证据链重算后全部通过"],
-  nextWord: ["next", "下一步"], nothingPending: ["nothing pending", "无待办事项"],
-  noRepair: ["no repair action reported", "未给出修复动作"],
-  facts: [(a, b, c, d) => `run <b>${a}</b> · stage <b>${b}</b> · preset <b>${c}</b> · mode <b>${d}</b>`,
-    (a, b, c, d) => `运行 <b>${a}</b> · 阶段 <b>${b}</b> · 预设 <b>${c}</b> · 模式 <b>${d}</b>`],
-  aiFacts: [(a, b, c) => `ai usage <b>${a}</b> · <b>${b}</b> of ${c} recomputable gates passed`,
-    (a, b, c) => `AI 使用状态 <b>${a}</b> · ${c} 个可重算 Gate 中 <b>${b}</b> 个通过`],
-  boundaryTip: [(g) => `${g} is a boundary stage: harness check accepts M1, P1, P2, W1, W2 and S1 only`,
-    (g) => `${g} 是边界阶段:harness check 只接受 M1、P1、P2、W1、W2 与 S1`],
-  decidedBy: ["decided by", "确认人"], awaiting: ["awaiting a human checkpoint", "等待人工确认"],
-  refused: ["REFUSED", "拒绝服务"],
-  pauseAria: ["Pause live recomputation", "暂停实时重算"],
-  resumeAria: ["Resume live recomputation", "恢复实时重算"],
-  chainAria: ["Gate chain", "证据链"],
-  loadFail: ["failed to load snapshot: ", "读取快照失败: "],
-};
-let lang = "en";
-const t = (k, ...args) => {
-  const entry = S[k];
-  const v = (entry || [k, k])[lang === "zh" ? 1 : 0];
-  return typeof v === "function" ? v(...args) : v;
-};
-const stateWord = (g) => t(g.state);
-function localize() {
-  document.documentElement.lang = lang;
-  document.querySelectorAll("[data-i18n]").forEach((n) => { n.innerHTML = t(n.dataset.i18n); });
-  el("lang").textContent = lang === "zh" ? "EN" : "中文";
-  el("lang").setAttribute("aria-label", t("toLang"));
-  el("rail").setAttribute("aria-label", t("chainAria"));
-  el("toggle").textContent = paused ? t("resume") : t("pause");
-}
-
-function table(id, head, empty, data) {
-  el(id).innerHTML = `<thead><tr>${t(head).map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>` +
-    (data.length ? data.join("")
-      : `<tr><td colspan="${t(head).length}" class="none">${t(empty)}</td></tr>`) + "</tbody>";
-  const markup = el(id).innerHTML;
-  if (el(id).dataset.prev && el(id).dataset.prev !== markup) {
-    el(id).classList.remove("chg"); void el(id).offsetWidth; el(id).classList.add("chg");
-  }
-  el(id).dataset.prev = markup;
-}
-const cell = (v, cls = "", title = "") =>
-  `<td class="${cls}"${title ? ` title="${esc(title)}"` : ""}>${v ?? ""}</td>`;
-
-const at = (iso) => { const t = Date.parse(iso); return Number.isNaN(t) ? null : t; };
-const dur = (a, b) => {
-  const s = at(a), f = at(b);
-  if (s === null || f === null) return "";
-  const ms = Math.max(0, f - s);
-  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
-};
-const clock = (iso) => {
-  const t = at(iso);
-  return t === null ? esc(iso || "") : new Date(t).toISOString().slice(11, 19) + "Z";
-};
-const legible = (detail) => String(detail).replace(/^"?[^\s"]*python(?:\.exe)?"?\s+/i, "").trim()
-  .split(/\s+/).map((p) => {
-    const seg = p.split(/[\\/]/).filter(Boolean);
-    return seg.length > 2 ? `…/${seg.slice(-2).join("/")}` : p;
-  }).join(" ");
-
-function layout(artifacts) {
-  const byId = new Map(artifacts.map((a) => [a.artifact_id, a]));
-  const depth = (id, seen = new Set()) => {
-    const node = byId.get(id);
-    if (!node || seen.has(id)) return 0;
-    seen.add(id);
-    const deps = node.deps || [];
-    return deps.length ? 1 + Math.max(...deps.map((d) => depth(d, seen))) : 0;
-  };
-  const columns = [];
-  artifacts.forEach((a) => { const d = depth(a.artifact_id); (columns[d] = columns[d] || []).push(a); });
-  return columns.filter(Boolean);
-}
-
-function drawDag(artifacts) {
-  const columns = layout(artifacts);
-  if (!columns.length) {
-    el("dag").innerHTML = `<div class="none">${t("emptyDag")}</div>`;
-    return;
-  }
-  const w = 176, h = 44, gx = 66, gy = 16;
-  const width = columns.length * (w + gx) + 20;
-  const height = Math.max(...columns.map((c) => c.length)) * (h + gy) + 20;
-  const pos = new Map();
-  columns.forEach((col, x) => col.forEach((a, y) => pos.set(a.artifact_id, { x: 20 + x * (w + gx), y: 20 + y * (h + gy), a })));
-  let edges = "", boxes = "";
-  pos.forEach((node) => (node.a.deps || []).forEach((dep) => {
-    const from = pos.get(dep);
-    if (from) edges += `<line x1="${from.x + w}" y1="${from.y + h / 2}" x2="${node.x}" y2="${node.y + h / 2}" marker-end="url(#arrow)"/>`;
-  }));
-  pos.forEach((node) => {
-    const f = node.a.freshness === "current" ? "current" : node.a.freshness === "stale" ? "stale" : "not_run";
-    const spec = [node.a.artifact_id, node.a.role, node.a.lifecycle, node.a.freshness, node.a.drift_reason].filter(Boolean).join(" · ");
-    boxes += `<g><rect class="${f}" x="${node.x}" y="${node.y}" width="${w}" height="${h}" rx="2"/>
-      <text class="role" x="${node.x + 9}" y="${node.y + 18}">${esc(String(node.a.role || "").slice(0, 24))}</text>
-      <text x="${node.x + 9}" y="${node.y + 32}">${esc(String(node.a.artifact_id).slice(0, 26) + (String(node.a.artifact_id).length > 26 ? "…" : ""))}</text>
-      <title>${esc(spec)}</title></g>`;
-  });
-  el("dag").innerHTML = `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${Math.min(height, 540)}"
-    role="img" aria-label="Artifact dependency graph">
-    <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5"
-      orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>${edges}${boxes}</svg>`;
-}
-
-const tip = (g, wait) => g.state === "boundary" ? t("boundaryTip", g.gate)
-  : g.human_checkpoint ? `${g.gate} · ${g.human_checkpoint} · ${g.checkpoint_actor} · ${t("decidedBy")} ${g.checkpoint_by}`
-  : wait ? `${g.gate} · ${t("awaiting")}`
-  : `${g.gate} · ${stateWord(g)}`;
-
-function rail(gates, data) {
-  let html = "";
-  gates.forEach((g, i) => {
-    if (i) {
-      const prev = gates[i - 1];
-      const state = prev.state === "passed" && g.state === "passed" ? "solid"
-        : prev.state === "passed" && g.state === "blocked" ? "broken"
-        : g.state === "boundary" || prev.state === "boundary" ? "boundary" : "open";
-      html += `<span class="conn ${state}"></span>`;
-    }
-    const wait = data.pending_human_checkpoints.map((s) => String(s).toUpperCase()).includes(g.gate);
-    const byAgent = Boolean(g.human_checkpoint) && g.checkpoint_actor === "agent";
-    const human = g.human_checkpoint ? `${byAgent ? t("agentWord") : t("human")} ${g.human_checkpoint}`
-      : wait ? t("needsHuman")
-      : g.state === "passed" || g.state === "blocked" ? t("noCheckpoint") : "";
-    html += `<div class="stop ${g.state}" title="${esc(tip(g, wait))}">
-      <i></i><b>${esc(g.gate)}</b><span class="s">${esc(stateWord(g))}</span>
-      <span class="h ${byAgent ? "by-agent" : wait ? "wait" : ""}">${esc(human)}</span></div>`;
-  });
-  el("rail").innerHTML = html;
-}
-
-const pips = (level) => {
-  const n = { L0: 1, L1: 2, L2: 3, L3: 4 }[String(level || "").slice(0, 2)] || 0;
-  return `<span class="pips">${"●".repeat(n)}<span class="off">${"●".repeat(4 - n)}</span></span>
-    <span class="none" style="font-size:11px">${esc(level)}</span>`;
-};
-
-function render(data) {
-  const blocked = String(data.first_blocked_gate || "").toUpperCase();
-  const recomputable = data.gates.filter((g) => g.state !== "boundary");
-  el("vword").textContent = data.gate_status;
-  el("vword").className = data.gate_status;
-  el("vfacts").innerHTML = [
-    `<span class="fact">${t("facts", esc(data.run_id), esc(data.stage), esc(data.preset), data.operator_mode ? esc(data.operator_mode) : `<span class="none">${t("modeUnset")}</span>`)}</span>`,
-    `<span class="fact">${t("aiFacts", esc(data.ai_usage_state), recomputable.filter((g) => g.state === "passed").length, recomputable.length)}</span>`,
-    `<span class="fact">${esc(data.project_root)}</span>`,
-  ].join("");
-  const actions = [...new Set(data.next_actions || [])];
-  el("vcmd").innerHTML = blocked
-    ? `${t("stopsAt")} <code>${esc(blocked)}</code> — ` + (actions[0] ? `<code>${esc(actions[0])}</code>` : t("noRepair"))
-    : `${t("chainClear")} — ` + (actions[0] ? `${t("nextWord")} <code>${esc(actions[0])}</code>` : t("nothingPending"));
-
-  rail(data.gates, data);
-  el("railkey").innerHTML = t("railKey") +
-    (data.stale_artifacts.length ? ` <span class="fail">${t("staleN", data.stale_artifacts.length)}</span>` : "") +
-    (data.pending_human_checkpoints.length
-      ? ` <span style="color:var(--human)">${t("pendingHuman", esc(data.pending_human_checkpoints.join(", ").toUpperCase()))}</span>` : "");
-
-  el("blockers").innerHTML = data.blockers.length
-    ? data.blockers.map((b) => `<li><span class="g">${esc(String(b.gate || "").toUpperCase())}</span>
-        <span><span class="m">${esc(b.message)}</span>
-        <span class="a">${t("next")} <code>${esc(b.next_action)}</code></span></span></li>`).join("")
-    : `<li><span class="clear">${t("clear")}</span></li>`;
-
-  el("sources").innerHTML = data.sources.map((s) =>
-    `<span class="${s.startsWith("mcp:") ? "live" : ""}">${esc(s)}</span>`).join("");
-
-  el("timeline").innerHTML = data.timeline.length ? data.timeline.map((e) =>
-    `<li class="${e.ok ? "ok" : "bad"}"><span class="spine"></span><div class="body">
-      <div class="k">${esc(t(e.kind))} <time>${esc(clock(e.at))}</time></div>
-      <div class="l"><span class="mark"></span>${esc(e.label)}${e.ok ? "" : ` <span class="pill fail">${t("failed")}</span>`}</div>
-      <div class="d" title="${esc(e.detail)}">${esc(legible(e.detail))}</div></div></li>`).join("")
-    : `<li><span class="spine"></span><div class="body"><div class="none">${t("emptyTimeline")}</div></div></li>`;
-
-  drawDag((data.artifacts || []).map((a) => ({ ...a, deps: a.dependencies || [] })));
-
-  table("receipts", "th", "emptyReceipts",
-    data.receipts.map((r) => `<tr class="${r.selected ? "chosen" : ""}">
-      ${cell(esc(r.receipt_id), "id")}${cell(esc(r.stage))}
-      ${cell(r.selected ? `<span class="pill pass">${t("used")}</span>` : "")}
-      ${cell(r.exit_code === 0 ? `<span class="pass">${esc(r.exit_code)}</span>` : `<span class="fail">${esc(r.exit_code)}</span>`, "num")}
-      ${cell(esc(dur(r.started_at, r.finished_at)), "num", `${r.started_at} → ${r.finished_at}`)}</tr>`));
-
-  table("reviews", "th2", "emptyReviews",
-    data.reviews.map((r) => `<tr>
-      ${cell(esc(r.perspective))}${cell(pips(r.independence_level))}
-      ${cell(`<span class="pill ${r.verdict === "pass" ? "pass" : "fail"}">${esc(r.verdict)}</span>`)}
-      ${cell(r.findings ? `<span class="fail">${esc(r.findings)}</span>` : "0", "num")}
-      ${cell(esc(clock(r.reviewed_at)), "num", r.path)}</tr>`));
-}
-
-const nextTheme = (pick) => (pick === "light" ? "dark" : pick === "dark" ? "system" : "light");
-
-async function refresh(force) {
-  if (paused && !force) return;
-  const data = await (await fetch("/api/snapshot")).json();
-  lastFetch = Date.now();
-  if (data.error) {
-    lastData = null;
-    el("vword").textContent = t("refused"); el("vword").className = "BLOCKED";
-    el("vfacts").innerHTML = `<span class="fact">${esc(data.error)}</span>`;
-    el("vcmd").innerHTML = ""; el("rail").innerHTML = ""; el("railkey").innerHTML = "";
-    stamp();
-    return;
-  }
-  const key = JSON.stringify([lang, data.gate_status, data.operator_mode, data.gates, data.stale_artifacts.length, data.receipts.length, data.reviews.length]);
-  if (key !== lastSeen || force) { lastSeen = key; lastData = data; render(data); }
-  stamp();
-}
-function stamp() {
-  el("ago").textContent = paused ? t("paused") : t("ago", Math.round((Date.now() - lastFetch) / 1000));
-}
-
-const themeKey = { light: "light", dark: "dark", system: "auto" };
-function applyTheme(pick) {
-  if (pick === "system") document.documentElement.removeAttribute("data-theme");
-  else document.documentElement.setAttribute("data-theme", pick);
-  try { localStorage.setItem("harness-console-theme", pick); } catch { /* private mode */ }
-  el("theme").textContent = t(themeKey[pick]);
-  el("theme").setAttribute("aria-label", t("toSheet", t(themeKey[nextTheme(pick)])));
-}
-function setLang(pick) {
-  lang = pick;
-  try { localStorage.setItem("harness-console-lang", pick); } catch { /* private mode */ }
-  localize();
-  applyTheme(theme);
-  lastSeen = "";
-  if (lastData) render(lastData); else refresh(true);
-  stamp();
-}
-let theme = "system";
-try {
-  theme = localStorage.getItem("harness-console-theme") || "system";
-  lang = localStorage.getItem("harness-console-lang") || (navigator.language.startsWith("zh") ? "zh" : "en");
-} catch { /* private mode */ }
-el("theme").addEventListener("click", () => { theme = nextTheme(theme); applyTheme(theme); });
-el("lang").addEventListener("click", () => setLang(lang === "zh" ? "en" : "zh"));
-el("toggle").addEventListener("click", () => {
-  paused = !paused;
-  el("tools").classList.toggle("paused", paused);
-  el("toggle").textContent = paused ? t("resume") : t("pause");
-  el("toggle").setAttribute("aria-label", paused ? t("resumeAria") : t("pauseAria"));
-  stamp();
-});
-localize();
-applyTheme(theme);
-setInterval(stamp, 1000);
-refresh(true).catch((err) => { el("ago").textContent = t("loadFail") + err; });
-setInterval(() => refresh().catch(() => {}), 5000);
-</script>
-</body>
+    <script>
+      const $ = (id) => document.getElementById(id),
+        esc = (v) =>
+          String(v ?? "").replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              })[c],
+          );
+      let lang = "zh",
+        theme = "light",
+        view = "overview",
+        data = null,
+        selection = null,
+        filter = "all",
+        query = "",
+        paused = false,
+        busy = false,
+        lastFetch = null,
+        transportError = "",
+        previewBlob = null;
+      try {
+        lang = localStorage.getItem("harness-console-lang") || "zh";
+        theme = localStorage.getItem("harness-console-theme") || "light";
+      } catch {}
+      const tr = (zh, en) => (lang === "zh" ? zh : en);
+      const words = {
+        overview: ["概览", "Overview"],
+        model: ["题目与模型", "Problem & models"],
+        runs: ["实验与验证", "Runs & reviews"],
+        paper: ["论文与图表", "Paper & figures"],
+        results: ["成果中心", "Deliverables"],
+        settings: ["环境与来源", "Environment & sources"],
+      };
+      const labels = {
+        passed: ["已通过", "Passed"],
+        blocked: ["受阻", "Blocked"],
+        locked: ["尚未检查", "Not evaluated"],
+        unknown: ["未知", "Unknown"],
+        boundary: ["流程边界", "Boundary"],
+        current: ["当前版本", "Current"],
+        stale: ["已过期", "Stale"],
+        not_run: ["未生成", "Not produced"],
+        READY: ["已检查 Gate 通过", "Observed gates pass"],
+        BLOCKED: ["当前流程受阻", "Blocked"],
+        ERROR: ["状态读取失败", "Status unavailable"],
+        LEGACY: ["旧版状态，需迁移", "Legacy state"],
+        PENDING_HUMAN: ["待人工确认", "Human decision pending"],
+      };
+      const word = (k) =>
+        labels[k]?.[lang === "zh" ? 0 : 1] ||
+        String(k ?? tr("未知", "Unknown"));
+      const names = {
+        M1: ["模型规划", "Model planning"],
+        P1: ["执行准备", "Execution readiness"],
+        P2: ["结果验证", "Result validation"],
+        W1: ["论文组织", "Paper planning"],
+        W2: ["论文评审", "Paper review"],
+        S1: ["交付检查", "Submission check"],
+      };
+      const name = (k) => names[k]?.[lang === "zh" ? 0 : 1] || k;
+      const artifactURL = (a, download = false) =>
+        "/api/artifact?id=" +
+        encodeURIComponent(a.artifact_id) +
+        (download ? "&download=1" : "");
+      const category = (a) => {
+        const p = String(a.path).toLowerCase(),
+          r = String(a.role);
+        return /\.(png|jpe?g|webp|svg)$/.test(p) || /figure/.test(r)
+          ? "figures"
+          : /\.(tex|pdf)$/.test(p) || /paper/.test(r)
+            ? "paper"
+            : /submission/.test(r)
+              ? "submission"
+              : "evidence";
+      };
+      const groups = {
+        paper: ["论文", "Paper"],
+        figures: ["图表", "Figures"],
+        evidence: ["代码与证据", "Code & evidence"],
+        submission: ["提交材料", "Submission"],
+      };
+      function chrome() {
+        document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+        document.documentElement.dataset.theme =
+          theme === "system"
+            ? matchMedia("(prefers-color-scheme:dark)").matches
+              ? "dark"
+              : "light"
+            : theme;
+        $("brand").innerHTML =
+          tr("数模工作台", "Modeling workspace") +
+          "<small>EVIDENCE HARNESS</small>";
+        $("readonly").textContent = tr(
+          "只读工作台 · 决策由 Harness 记录",
+          "Read-only · decisions recorded by Harness",
+        );
+        $("nav").innerHTML = Object.keys(words)
+          .map(
+            (k) =>
+              `<button data-view="${k}" aria-current="${view === k ? "page" : "false"}">${esc(words[k][lang === "zh" ? 0 : 1])}</button>`,
+          )
+          .join("");
+        $("breadcrumb").textContent = words[view][lang === "zh" ? 0 : 1];
+        $("refresh").textContent = tr("刷新", "Refresh");
+        $("pause").textContent = paused
+          ? tr("继续刷新", "Resume")
+          : tr("暂停刷新", "Pause");
+        $("theme").textContent = tr("主题：", "Theme: ") + theme;
+        $("lang").textContent = lang === "zh" ? "EN" : "中文";
+        $("connection").textContent = transportError
+          ? tr("连接失败，显示上次快照", "Connection failed; previous snapshot")
+          : paused
+            ? tr("已暂停", "Paused")
+            : lastFetch
+              ? tr("最近重算 ", "Recomputed ") +
+                new Date(lastFetch).toLocaleTimeString()
+              : tr("读取中…", "Loading…");
+        $("project").textContent = data?.project_root || "";
+      }
+      function head(title, sub) {
+        return `<div class="page-head"><div class="eyebrow">${esc(data.run_id || "—")} · ${esc(word(data.gate_status))}</div><h1>${title}</h1><p class="muted" style="margin-top:10px">${sub}</p></div>`;
+      }
+      function list(rows, fn) {
+        return rows.length
+          ? `<div class="rows">${rows.map(fn).join("")}</div>`
+          : `<div class="empty">${tr("暂无记录。生成并登记对应产物后，这里会展示实际证据。", "No records. Produce and register artifacts to show evidence here.")}</div>`;
+      }
+      function row(kind, id, title, status, path) {
+        return `<button class="row" data-kind="${kind}" data-id="${esc(id)}" aria-pressed="${selection?.kind === kind && String(selection.id) === String(id)}"><div class="row-title"><b>${esc(title)}</b><span class="small muted">${esc(status)}</span></div><p><code>${esc(path || "—")}</code></p></button>`;
+      }
+      function render() {
+        chrome();
+        $("error").innerHTML = transportError
+          ? `<div class="error-banner">${esc(transportError)}</div>`
+          : "";
+        if (!data) {
+          $("content").innerHTML =
+            `<div class="empty">${tr("正在读取项目状态。", "Reading project state.")}</div>`;
+          return;
+        }
+        if (data.status_errors?.length)
+          $("error").innerHTML +=
+            `<div class="error-banner">${esc(word(data.gate_status))}<br>${data.status_errors.map(esc).join("<br>")}</div>`;
+        const arts = data.artifacts || [],
+          blocked = String(data.first_blocked_gate || "").toUpperCase();
+        if (view === "overview") {
+          $("content").innerHTML =
+            head(
+              data.gate_status === "ERROR"
+                ? tr("先恢复项目状态读取", "Restore project state first")
+                : blocked
+                  ? tr("先完成", "Complete ") + esc(name(blocked))
+                  : esc(word(data.gate_status)),
+              tr(
+                "当前工作和后续人工确认分开呈现。",
+                "Current work and later human decisions are shown separately.",
+              ),
+            ) +
+            `<div class="rail">${(data.gates || [])
+              .filter((g) => names[g.gate])
+              .map(
+                (g) =>
+                  `<div class="step ${esc(g.state)}"><b>${esc(name(g.gate))}</b><small>${g.gate} · ${esc(word(g.state))}</small></div>`,
+              )
+              .join(
+                "",
+              )}</div><section class="action"><div class="eyebrow">${tr("当前工作", "Current work")} · ${esc(blocked || data.stage || "—")}</div><h2>${esc(word(data.gate_status))}</h2><p>${esc(data.next_action || data.next_actions?.[0] || tr("没有可推导的下一步，请检查来源。", "No next action available; inspect sources."))}</p><div class="tools"><button class="primary" data-copy="check">${tr("复制检查命令", "Copy check command")}</button><button data-view="results">${tr("浏览已有成果", "Browse deliverables")}</button></div></section><div class="section-head"><h2>${tr("需要处理", "Needs attention")}</h2><span class="muted small">${(data.blockers || []).length} ${tr("条 Gate 诊断", "gate diagnostics")}</span></div>` +
+            list(data.blockers || [], (b, i) =>
+              row(
+                "issue",
+                i,
+                b.message,
+                String(b.gate || "").toUpperCase(),
+                b.next_action,
+              ),
+            ) +
+            `<div class="section-head"><h2>${tr("待人工确认", "Pending human decisions")}</h2></div><p class="muted">${esc((data.pending_human_checkpoints || []).join(" · ") || tr("暂无待确认项", "None reported"))}</p><p class="muted small">${tr("先处理当前 Gate 的证据诊断；后续人工确认不代表现在应批准。", "Resolve current gate evidence first. Later decisions are not instructions to approve now.")}</p>`;
+        } else if (view === "runs") {
+          $("content").innerHTML =
+            head(
+              tr("执行与验证证据", "Execution & review evidence"),
+              tr(
+                "回执、选用结果和评审报告按真实记录展示。",
+                "Receipts, selection and reviews from recorded evidence.",
+              ),
+            ) +
+            `<div class="section-head"><h2>${tr("执行回执", "Execution receipts")}</h2></div>` +
+            list(data.receipts || [], (r, i) =>
+              row(
+                "receipt",
+                i,
+                r.receipt_id,
+                `${r.stage || "—"} · ${tr("退出码", "exit")} ${r.exit_code ?? "—"}${r.selected ? " · " + tr("选用", "selected") : ""}`,
+                r.path,
+              ),
+            ) +
+            `<div class="section-head"><h2>${tr("评审", "Reviews")}</h2></div>` +
+            list(data.reviews || [], (r, i) =>
+              row(
+                "review",
+                i,
+                r.perspective,
+                `${r.verdict || "—"} · ${r.independence_level || "—"}`,
+                r.path,
+              ),
+            ) +
+            `<div class="section-head"><h2>${tr("最近活动", "Recent activity")}</h2></div>` +
+            list(
+              [...(data.timeline || [])].reverse(),
+              (e) =>
+                `<div class="row"><b>${esc(e.label)}</b><p>${esc(e.at || "—")} · ${esc(e.detail)}</p></div>`,
+            );
+        } else if (view === "settings") {
+          $("content").innerHTML =
+            head(
+              tr("环境与事实来源", "Environment & fact sources"),
+              tr(
+                "自动模式是授权声明；这里不表示后台执行器正在运行。",
+                "Auto mode declares authorization; it does not indicate a running executor.",
+              ),
+            ) +
+            `<div class="rows"><div class="row">${tr("项目根目录", "Project root")}<p><code>${esc(data.project_root)}</code></p></div><div class="row">${tr("当前阶段 / 模式", "Stage / mode")}<p>${esc(data.stage || "—")} / ${esc(data.operator_mode || "—")}</p></div><div class="row">${tr("状态退出码", "Status exit code")}<p>${esc(data.status_exit_code ?? "—")}</p></div>${(data.sources || []).map((s) => `<div class="row"><code>${esc(s)}</code></div>`).join("")}</div><details><summary>${tr("完整机器快照", "Full machine snapshot")}</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
+        } else {
+          let visible = arts
+            .filter((a) =>
+              view === "paper"
+                ? ["paper", "figures"].includes(category(a))
+                : view === "model"
+                  ? /model|problem|data_contract|implementation/.test(a.role)
+                  : filter === "all" || category(a) === filter,
+            )
+            .filter((a) =>
+              [a.path, a.role, a.artifact_id]
+                .join(" ")
+                .toLowerCase()
+                .includes(query.toLowerCase()),
+            );
+          $("content").innerHTML =
+            head(
+              words[view][lang === "zh" ? 0 : 1],
+              tr(
+                "已登记产物的新鲜度与冻结状态分别展示。文件存在不等于验收通过。",
+                "Freshness and lifecycle are separate. File existence is not acceptance.",
+              ),
+            ) +
+            (view === "results"
+              ? `<div class="cards">${Object.keys(groups)
+                  .map(
+                    (k) =>
+                      `<button class="card" data-filter="${k}" aria-pressed="${filter === k}"><span class="muted">${groups[k][lang === "zh" ? 0 : 1]}</span><strong>${arts.filter((a) => category(a) === k).length}</strong><span class="small muted">${tr("已登记", "registered")}</span></button>`,
+                  )
+                  .join("")}</div>`
+              : "") +
+            `<div class="search"><input id="search" aria-label="${tr("搜索产物", "Search artifacts")}" placeholder="${tr("搜索名称、角色或路径", "Search name, role or path")}" value="${esc(query)}">${filter !== "all" ? `<button data-filter="all">${tr("全部", "All")}</button>` : ""}</div>` +
+            list(visible, (a) =>
+              row(
+                "artifact",
+                a.artifact_id,
+                a.role,
+                word(a.freshness) + " · " + a.lifecycle,
+                a.path,
+              ),
+            ) +
+            `<p class="muted small" style="margin-top:16px">${tr("逐问成果需要显式题目—模型—验证—论文关联；缺少关联时保留未知，不按文件名推测。", "Question-level outcomes require explicit problem–model–validation–paper links; missing links remain unknown.")}</p>`;
+          if (data.artifact_errors?.length)
+            $("content").innerHTML +=
+              `<div class="error-banner">${data.artifact_errors.map(esc).join("<br>")}</div>`;
+        }
+        inspect();
+      }
+      function inspect() {
+        let selected = selection;
+        if (!selected && data.blockers?.length)
+          selected = { kind: "issue", id: 0 };
+        let body = "",
+          title = tr("工作详情", "Work details");
+        if (selected?.kind === "issue") {
+          const b = data.blockers?.[selected.id];
+          if (b)
+            body = `<dl><dt>Gate</dt><dd>${esc(String(b.gate).toUpperCase())}</dd><dt>${tr("诊断原文", "Reported diagnostic")}</dt><dd>${esc(b.message)}</dd><dt>${tr("修复方向", "Repair direction")}</dt><dd>${esc(b.next_action)}</dd></dl><div class="links"><button data-copy="check">${tr("复制复查命令", "Copy recheck command")}</button></div>`;
+        } else if (selected?.kind === "artifact") {
+          const a = data.artifacts.find((a) => a.artifact_id === selected.id);
+          if (a) {
+            title = tr("成果详情", "Artifact details");
+            body = `<dl><dt>${tr("路径", "Path")}</dt><dd><code>${esc(a.path)}</code></dd><dt>${tr("新鲜度 / 生命周期", "Freshness / lifecycle")}</dt><dd>${esc(word(a.freshness))} · ${esc(a.lifecycle)}</dd><dt>${tr("生成器 / 回执", "Producer / receipt")}</dt><dd><code>${esc(a.producer_id || "—")}<br>${esc(a.producer_receipt_id || tr("未绑定", "Not bound"))}</code></dd><dt>${tr("变化原因", "Drift reason")}</dt><dd>${esc(a.drift_reason || "—")}</dd><dt>${tr("上游证据", "Upstream evidence")}</dt><dd>${
+              (a.dependencies || [])
+                .map((id) => {
+                  const dep = data.artifacts.find((x) => x.artifact_id === id);
+                  return row(
+                    "artifact",
+                    id,
+                    dep?.role || id,
+                    "",
+                    dep?.path || tr("关联产物未找到", "Dependency unavailable"),
+                  );
+                })
+                .join("") || tr("没有已登记依赖", "No registered dependencies")
+            }</dd></dl><div class="links"><a href="${artifactURL(a, true)}" download>${tr("下载文件", "Download file")}</a></div><p class="small muted">${tr("尚未生成的文件返回 404。", "Missing files return 404.")}</p><details><summary>${tr("机器记录", "Machine record")}</summary><pre>${esc(JSON.stringify(a, null, 2))}</pre></details>`;
+            const ext = String(a.path).toLowerCase();
+            if (/\.(png|jpe?g|webp|pdf)$/.test(ext)) {
+              $("content").insertAdjacentHTML(
+                "beforeend",
+                `<section class="preview"><h2>${tr("文件预览", "File preview")}</h2><p class="small muted"><code>${esc(a.path)}</code></p><button id="open-preview">${tr("加载预览", "Load preview")}</button><div id="preview-body"></div></section>`,
+              );
+              $("open-preview").onclick = async () => {
+                try {
+                  const res = await fetch(artifactURL(a));
+                  if (!res.ok) throw Error((await res.json()).error);
+                  const blob = await res.blob();
+                  if (previewBlob) URL.revokeObjectURL(previewBlob);
+                  previewBlob = URL.createObjectURL(blob);
+                  $("preview-body").innerHTML = /\.pdf$/.test(ext)
+                    ? `<iframe title="PDF preview" src="${previewBlob}"></iframe>`
+                    : `<img alt="${esc(a.role)}" src="${previewBlob}">`;
+                } catch (e) {
+                  $("preview-body").textContent =
+                    tr("无法预览：", "Preview unavailable: ") + e.message;
+                }
+              };
+            }
+          }
+        } else if (selected) {
+          const r =
+            selected.kind === "receipt"
+              ? data.receipts?.[selected.id]
+              : data.reviews?.[selected.id];
+          if (r) {
+            title = tr("证据记录", "Evidence record");
+            body = `<pre>${esc(JSON.stringify(r, null, 2))}</pre>`;
+          }
+        }
+        $("inspector").innerHTML =
+          `<h2>${title}</h2>${body || `<p class="muted">${tr("选择诊断、回执或成果，查看来源和依赖。", "Select a diagnostic, receipt or artifact to inspect provenance.")}</p>`}<details><summary>${tr("事实来源", "Fact sources")}</summary><pre>${esc((data.sources || []).join("\n"))}</pre></details>`;
+      }
+      function checkCommand() {
+        const gate = String(data?.first_blocked_gate || "").toUpperCase(),
+          root = String(data?.project_root || "").replace(/'/g, "''");
+        return gate && names[gate]
+          ? `harness check ${gate} --project '${root}' --json`
+          : `harness status --project '${root}' --json`;
+      }
+      document.addEventListener("click", async (e) => {
+        const b = e.target.closest(
+          "[data-view],[data-kind],[data-filter],[data-copy]",
+        );
+        if (!b) return;
+        if (b.dataset.copy) {
+          try {
+            await navigator.clipboard.writeText(checkCommand());
+            $("notice").textContent = tr(
+              "已复制 PowerShell 命令",
+              "PowerShell command copied",
+            );
+          } catch {
+            $("notice").textContent = checkCommand();
+          }
+          return;
+        }
+        if (b.dataset.view) {
+          view = b.dataset.view;
+          selection = null;
+          filter = "all";
+          query = "";
+        } else if (b.dataset.filter) {
+          filter = b.dataset.filter;
+          selection = null;
+        } else selection = { kind: b.dataset.kind, id: b.dataset.id };
+        if (previewBlob) {
+          URL.revokeObjectURL(previewBlob);
+          previewBlob = null;
+        }
+        render();
+      });
+      document.addEventListener("input", (e) => {
+        if (e.target.id === "search") {
+          query = e.target.value;
+          const start = e.target.selectionStart;
+          render();
+          $("search").focus();
+          $("search").setSelectionRange(start, start);
+        }
+      });
+      async function refresh() {
+        if (busy) return;
+        busy = true;
+        try {
+          const response = await fetch("/api/snapshot");
+          const value = await response.json();
+          if (!response.ok || value.error)
+            throw Error(value.error || response.status);
+          data = value;
+          lastFetch = Date.now();
+          transportError = "";
+          render();
+        } catch (e) {
+          transportError =
+            tr("快照请求失败：", "Snapshot request failed: ") + e.message;
+          render();
+        } finally {
+          busy = false;
+        }
+      }
+      $("refresh").onclick = refresh;
+      $("pause").onclick = () => {
+        paused = !paused;
+        chrome();
+      };
+      $("lang").onclick = () => {
+        lang = lang === "zh" ? "en" : "zh";
+        try {
+          localStorage.setItem("harness-console-lang", lang);
+        } catch {}
+        render();
+      };
+      $("theme").onclick = () => {
+        theme =
+          theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+        try {
+          localStorage.setItem("harness-console-theme", theme);
+        } catch {}
+        render();
+      };
+      matchMedia("(prefers-color-scheme:dark)").addEventListener(
+        "change",
+        () => {
+          if (theme === "system") chrome();
+        },
+      );
+      render();
+      refresh();
+      setInterval(() => {
+        if (!paused && !selection) refresh();
+      }, 10000);
+    </script>
+  </body>
 </html>

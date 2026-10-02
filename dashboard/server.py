@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -57,7 +58,10 @@ def _receipts(root: Path) -> list[dict[str, Any]]:
     for entry in index.get("receipts", []) if isinstance(index.get("receipts"), list) else []:
         if not isinstance(entry, dict):
             continue
-        receipt = _read_json(root / str(entry.get("receipt_path", "")))
+        receipt_path = (root / str(entry.get("receipt_path", ""))).resolve()
+        if not mcp_server.is_within(receipt_path, root.resolve()):
+            continue
+        receipt = _read_json(receipt_path)
         rows.append({
             "receipt_id": entry.get("receipt_id"),
             "stage": entry.get("stage") or receipt.get("stage"),
@@ -171,12 +175,16 @@ def snapshot(root: Path) -> dict[str, Any]:
         "operator_mode": state.get("operator_mode"),
         "operator_mode_history": mode_history,
         "gate_status": state.get("gate_status"),
+        "status_errors": state.get("errors") or [],
+        "status_exit_code": state.get("status_exit_code"),
+        "next_action": state.get("next_action"),
         "first_blocked_gate": state.get("first_blocked_gate"),
         "gates": [
             {
                 "gate": gate,
                 "state": (
-                    "boundary" if gate in BOUNDARY_STAGES
+                    "unknown" if state.get("gate_status") in {"ERROR", "LEGACY", None}
+                    else "boundary" if gate in BOUNDARY_STAGES
                     else "passed" if gate.lower() in gates
                     else "blocked" if gate.lower() == blocked
                     else "locked"
@@ -223,13 +231,47 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"), "application/json; charset=utf-8")
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler protocol
+        route = urlsplit(self.path)
         if self.path in ("/", "/index.html"):
             self._send(200, (DASHBOARD_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
             return
-        if self.path.startswith("/api/snapshot"):
+        if route.path == "/api/artifact":
+            wanted = parse_qs(route.query).get("id", [""])[0]
+            try:
+                _narrow_mcp_roots(self.root.resolve())
+                listed = _tool(self.root, "list_artifacts")
+                node = next((row for row in listed.get("artifacts", []) if row.get("artifact_id") == wanted), None)
+                if node is None:
+                    self._json(404, {"error": "artifact is not registered"})
+                    return
+                path = (self.root / str(node.get("path", ""))).resolve()
+                if not mcp_server.is_within(path, self.root.resolve()):
+                    self._json(403, {"error": "artifact is outside the project root"})
+                    return
+                if not path.is_file():
+                    self._json(404, {"error": "registered artifact has not been produced"})
+                    return
+                preview_types = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+                content_type = preview_types.get(path.suffix.lower(), "application/octet-stream")
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Security-Policy", "sandbox")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Disposition", "attachment" if "download" in parse_qs(route.query) or content_type == "application/octet-stream" else "inline")
+                body = path.read_bytes()
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (mcp_server.ToolCallError, RuntimeError) as exc:
+                self._json(403, {"error": str(exc)})
+            except OSError as exc:
+                self._json(500, {"error": str(exc)})
+            return
+        if route.path == "/api/snapshot":
             try:
                 self._json(200, snapshot(self.root))
-            except mcp_server.ToolCallError as exc:
+            except (mcp_server.ToolCallError, RuntimeError) as exc:
                 self._json(403, {"error": str(exc)})
             except OSError as exc:
                 self._json(500, {"error": str(exc)})

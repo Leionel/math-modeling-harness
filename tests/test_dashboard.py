@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -86,6 +87,46 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"Harness Console", page)
         self.assertIn(b"/api/snapshot", page)
+
+    def test_status_failure_makes_all_gate_states_unknown(self) -> None:
+        def tool(root, name, **kwargs):
+            return {"gate_status": "ERROR", "errors": ["bad manifest"], "status_exit_code": 2} if name == "get_run_state" else {"artifacts": []}
+        with patch.object(console, "_tool", side_effect=tool):
+            payload = json.loads(self.get("/api/snapshot")[1])
+        self.assertEqual(payload["status_errors"], ["bad manifest"])
+        self.assertTrue(all(row["state"] == "unknown" for row in payload["gates"]))
+
+    def test_artifact_download_uses_registered_identity_and_actual_bytes(self) -> None:
+        path = self.project / "preview.png"
+        path.write_bytes(b"actual artifact bytes")
+        self.addCleanup(path.unlink)
+        with patch.object(console, "_tool", return_value={"artifacts": [{"artifact_id": "FIG 1", "path": "preview.png"}]}):
+            with urllib.request.urlopen(self.base + "/api/artifact?id=FIG%201", timeout=20) as response:
+                self.assertEqual(response.read(), b"actual artifact bytes")
+                self.assertEqual(response.headers["Content-Type"], "image/png")
+                self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+            with urllib.request.urlopen(self.base + "/api/artifact?id=FIG%201&download=1", timeout=20) as response:
+                self.assertEqual(response.headers["Content-Disposition"], "attachment")
+
+    def test_artifact_route_rejects_unregistered_missing_and_escaping_files(self) -> None:
+        for nodes, wanted, expected in [
+            ([], "anything", 404),
+            ([{"artifact_id": "missing", "path": "absent.pdf"}], "missing", 404),
+            ([{"artifact_id": "escape", "path": "../outside.pdf"}], "escape", 403),
+        ]:
+            with self.subTest(wanted=wanted), patch.object(console, "_tool", return_value={"artifacts": nodes}):
+                with self.assertRaises(urllib.error.HTTPError) as raised:
+                    self.get("/api/artifact?id=" + wanted)
+                self.assertEqual(raised.exception.code, expected)
+
+    def test_active_content_is_downloaded_instead_of_rendered(self) -> None:
+        path = self.project / "unsafe.html"
+        path.write_text("<script>alert(1)</script>", encoding="utf-8")
+        self.addCleanup(path.unlink)
+        with patch.object(console, "_tool", return_value={"artifacts": [{"artifact_id": "page", "path": "unsafe.html"}]}):
+            with urllib.request.urlopen(self.base + "/api/artifact?id=page", timeout=20) as response:
+                self.assertEqual(response.headers["Content-Type"], "application/octet-stream")
+                self.assertEqual(response.headers["Content-Disposition"], "attachment")
 
     def test_serving_never_mutates_the_project(self) -> None:
         before = _tree_digest(self.project)
