@@ -536,6 +536,14 @@
         blocked: ["受阻", "Blocked"],
         locked: ["尚未检查", "Not evaluated"],
         unknown: ["未知", "Unknown"],
+        unverified: ["未验证", "Unverified"],
+        current_package: ["当前写作包已绑定（不代表论文质量通过）", "Current bound writer package"],
+        matched: ["已定位", "Located"],
+        missing: ["缺失", "Missing"],
+        ambiguous: ["多处匹配，需核对", "Multiple matches"],
+        "no registered writer package": ["尚未登记写作证据包", "no registered writer package"],
+        "no registered claimable PASS frozen results": ["尚未登记可供写作的冻结结果", "no registered claimable PASS frozen results"],
+        "model authoring source changed": ["模型作者源已改变，需要重新编译并验证", "model authoring source changed"],
         boundary: ["流程边界", "Boundary"],
         current: ["当前版本", "Current"],
         stale: ["已过期", "Stale"],
@@ -641,6 +649,8 @@
         if (data.status_errors?.length)
           $("error").innerHTML +=
             `<div class="error-banner">${esc(word(data.gate_status))}<br>${data.status_errors.map(esc).join("<br>")}</div>`;
+        if (data.source_errors?.length)
+          $("error").innerHTML += `<div class="error-banner">${tr("源文件目录读取失败：", "Source catalog failed: ")}${data.source_errors.map(esc).join("<br>")}</div>`;
         const arts = data.artifacts || [],
           blocked = String(data.first_blocked_gate || "").toUpperCase();
         if (view === "overview") {
@@ -710,6 +720,32 @@
               (e) =>
                 `<div class="row"><b>${esc(e.label)}</b><p>${esc(e.at || "—")} · ${esc(e.detail)}</p></div>`,
             );
+        } else if (view === "model") {
+          const workbench = data.question_workbench || {};
+          $("content").innerHTML =
+            head(
+              tr("题目与模型", "Problem & models"),
+              tr(
+                "按明确的小问标识查看任务、模型、执行产物、验证和论文边界。",
+                "Explicit question links connect tasks, models, outputs, validation and paper boundaries.",
+              ),
+            ) +
+            list(workbench.questions || [], (q) =>
+              row(
+                "question",
+                q.question_id,
+                q.question_id.toUpperCase() + " · " + q.task,
+                q.model_source_stale
+                  ? tr("作者源已变更", "Source changed")
+                  : tr("合同声明", "Contract declaration"),
+                q.outputs.join(" · "),
+              ),
+            ) +
+            `<div class="section-head"><h2>${tr("作者文件", "Authoring sources")}</h2></div>` +
+            sourceRows(["authoring", "reasoning"]);
+          if (workbench.errors?.length)
+            $("content").innerHTML +=
+              `<div class="error-banner">${workbench.errors.map(esc).join("<br>")}</div>`;
         } else if (view === "settings") {
           $("content").innerHTML =
             head(
@@ -766,7 +802,30 @@
             $("content").innerHTML +=
               `<div class="error-banner">${data.artifact_errors.map(esc).join("<br>")}</div>`;
         }
+        if (view === "runs")
+          $("content").innerHTML +=
+            `<div class="section-head"><h2>${tr("执行日志", "Execution logs")}</h2></div>` +
+            sourceRows(["log"]) +
+            `<div class="section-head"><h2>${tr("待审版本绑定", "Reviewed version bindings")}</h2></div>` +
+            sourceRows(["reviewed_version"]);
+        if (view === "paper")
+          $("content").innerHTML +=
+            `<div class="section-head"><h2>${tr("实际论文源", "Actual paper sources")}</h2></div>` +
+            sourceRows(["paper_source"]);
         inspect();
+      }
+      function sourceRows(kinds) {
+        return list(
+          (data.user_sources || []).filter((s) => kinds.includes(s.kind)),
+          (s) =>
+            row(
+              "source",
+              s.source_id,
+              s.path,
+              s.exists ? word(s.freshness) : tr("尚未生成", "Not produced"),
+              s.source_id,
+            ),
+        );
       }
       function inspect() {
         let selected = selection;
@@ -777,7 +836,25 @@
         if (selected?.kind === "issue") {
           const b = data.blockers?.[selected.id];
           if (b)
-            body = `<dl><dt>Gate</dt><dd>${esc(String(b.gate).toUpperCase())}</dd><dt>${tr("诊断原文", "Reported diagnostic")}</dt><dd>${esc(b.message)}</dd><dt>${tr("修复方向", "Repair direction")}</dt><dd>${esc(b.next_action)}</dd></dl><div class="links"><button data-copy="check">${tr("复制复查命令", "Copy recheck command")}</button></div>`;
+            body = `<dl><dt>Gate</dt><dd>${esc(String(b.gate).toUpperCase())}</dd><dt>${tr("中文解释", "Explanation (Chinese)")}</dt><dd>${esc(b.action?.summary_zh || b.message)}<p>${esc(b.action?.corrective_action_zh || "")}</p></dd><dt>${tr("诊断原文", "Reported diagnostic")}</dt><dd>${esc(b.message)}</dd><dt>${tr("修复方向", "Repair direction")}</dt><dd>${esc(b.next_action)}</dd></dl><div class="links"><button data-copy="check">${tr("复制复查命令", "Copy recheck command")}</button><button data-copy="posix">${tr("复制 bash 复查", "Copy bash recheck")}</button>${b.action?.target_source_id ? `<button data-kind="source" data-id="${esc(b.action.target_source_id)}">${tr("查看目标源文件", "View target source")}</button><button data-copy="compile">${tr("复制编译命令", "Copy compile command")}</button>` : ""}</div>`;
+        } else if (selected?.kind === "source") {
+          const s = (data.user_sources || []).find(
+            (s) => s.source_id === selected.id,
+          );
+          title = tr("源文件与版本", "Source & version");
+          if (s) {
+            body = `<p><code>${esc(s.path)}</code></p><p>${esc(word(s.freshness))}</p><div class="links"><button id="load-source">${tr("读取内容", "Read content")}</button><button data-copy="path">${tr("复制路径", "Copy path")}</button></div><p class="small muted">${tr("只读预览；日志有长度限制并做敏感信息遮盖。", "Read-only; logs are bounded and redacted.")}</p><div id="source-content"></div>`;
+          }
+        } else if (selected?.kind === "question") {
+          const q = data.question_workbench?.questions?.find(
+            (q) => q.question_id === selected.id,
+          );
+          title = q
+            ? q.question_id.toUpperCase() + tr(" 工作详情", " task details")
+            : tr("小问不可用", "Question unavailable");
+          if (q) {
+            body = `<h2>${esc(q.task)}</h2><dl><dt>${tr("合同模型", "Declared models")}</dt><dd>${q.models.map((m) => `<b>${esc(m.name)}</b><p>${esc(m.algorithm)} · ${esc(m.rationale)}</p>`).join("")}</dd><dt>${tr("实际执行产物", "Executed outputs")}</dt><dd>${q.executed_outputs.map((o) => `<p><code>${esc(o.path)}</code><br>${esc(o.stage)} · ${esc(word(o.freshness))} · ${esc(o.receipt_id)}</p>`).join("") || tr("尚无明确关联的执行产物", "No explicitly linked outputs")}</dd><dt>${tr("验证义务", "Validation obligations")}</dt><dd>${q.validation_obligations.map((v) => `<p><b>${esc(v.obligation_id)} · ${esc(v.status)}</b><br>${esc(v.method)}${v.evidence ? `<br><code>${esc(v.evidence.path)}</code>` : ""}</p>`).join("")}</dd><dt>${tr("可用于论文的证据", "Writer evidence")}</dt><dd>${esc(word(q.writer_eligibility))}<p>${q.writer_limits.map((limit) => esc(word(limit))).join("<br>")}</p></dd><dt>${tr("实际正文位置", "Actual source locations")}</dt><dd>${q.paper_locations.map((l) => `<p>${esc(l.marker)} · ${esc(word(l.state))}<br>${l.matches.map((m) => `${esc(m.path)}:${m.line}`).join("<br>")}</p>`).join("") || tr("尚无已声明的定位符", "No declared locators")}</dd><dt>${tr("源码与 PDF 绑定", "Source/PDF binding")}</dt><dd>${esc(word(data.question_workbench.paper_binding?.status || "unverified"))}</dd></dl><details><summary>${tr("论证与来源原始投影", "Argument and source projection")}</summary><pre>${esc(JSON.stringify(q, null, 2))}</pre></details>`;
+          }
         } else if (selected?.kind === "artifact") {
           const a = data.artifacts.find((a) => a.artifact_id === selected.id);
           if (a) {
@@ -831,6 +908,21 @@
         }
         $("inspector").innerHTML =
           `<h2>${title}</h2>${body || `<p class="muted">${tr("选择诊断、回执或成果，查看来源和依赖。", "Select a diagnostic, receipt or artifact to inspect provenance.")}</p>`}<details><summary>${tr("事实来源", "Fact sources")}</summary><pre>${esc((data.sources || []).join("\n"))}</pre></details>`;
+        if ($("load-source"))
+          $("load-source").onclick = async () => {
+            const output = $("source-content");
+            try {
+              const response = await fetch(
+                "/api/source?id=" + encodeURIComponent(selected.id),
+              );
+              const result = await response.json();
+              if (!response.ok) throw Error(result.error);
+              output.innerHTML = `<p class="muted">${esc(result.unavailable_reason || (result.truncated ? tr("内容已截断", "Content truncated") : ""))}</p><pre>${esc(result.text)}</pre>`;
+            } catch (e) {
+              output.textContent =
+                tr("读取失败：", "Read failed: ") + e.message;
+            }
+          };
       }
       function checkCommand() {
         const gate = String(data?.first_blocked_gate || "").toUpperCase(),
@@ -845,14 +937,34 @@
         );
         if (!b) return;
         if (b.dataset.copy) {
+          let copiedText = "";
           try {
-            await navigator.clipboard.writeText(checkCommand());
+            const selectedIssue =
+              selection?.kind === "issue"
+                ? data.blockers?.[selection.id]
+                : data.blockers?.[0];
+            const action = selectedIssue?.action;
+            const source = (data.user_sources || []).find(
+              (s) => s.source_id === selection?.id,
+            );
+            const text =
+              b.dataset.copy === "posix"
+                ? action?.command?.posix || checkCommand()
+                : b.dataset.copy === "compile"
+                  ? action?.compile_command?.powershell || checkCommand()
+                  : b.dataset.copy === "path"
+                    ? data.project_root.replace(/[\\/]$/, "") +
+                      "/" +
+                      source.path
+                    : action?.command?.powershell || checkCommand();
+            copiedText = text;
+            await navigator.clipboard.writeText(text);
             $("notice").textContent = tr(
-              "已复制 PowerShell 命令",
-              "PowerShell command copied",
+              "已复制" + (b.dataset.copy === "path" ? "文件路径" : b.dataset.copy === "posix" ? " bash 命令" : " PowerShell 命令"),
+              b.dataset.copy === "path" ? "File path copied" : b.dataset.copy === "posix" ? "bash command copied" : "PowerShell command copied",
             );
           } catch {
-            $("notice").textContent = checkCommand();
+            $("notice").textContent = copiedText || checkCommand();
           }
           return;
         }

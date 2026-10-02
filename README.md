@@ -25,7 +25,7 @@ MCP, and a human watches the identical read path in a console.
    MCP interface      scripts/mcp_server.py    (JSON-RPC/stdio)
    (one door)         13 read-only tools · 1 opt-in mutating tool
                              │                       │
-   Harness runtime    harness CLI — 31 commands, one project root
+   Harness runtime    harness CLI — 32 commands, one project root
                              │                       │
    Evidence layer     Gate Engine · Artifact DAG · Execution Receipts
    (deterministic)    Hash/Freshness · Evidence Registry · Validation

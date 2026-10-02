@@ -10,6 +10,27 @@
 先记住一句话:**Agent 负责想,负责写,负责改;Harness 负责判定什么算事实。**
 你后面看到的每一条规则,都是这句话的具体化。
 
+## 第一次使用：可直接复制的教学流程
+
+先完成下面的依赖安装，再从 Harness checkout 根目录执行：
+
+PowerShell：
+
+```powershell
+./examples/user_walkthrough/run.ps1
+```
+
+Linux bash：
+
+```bash
+bash examples/user_walkthrough/run.sh
+```
+
+两条命令运行同一教学任务，自动创建保留的临时项目，逐步打印实际路径和完整命令。
+覆盖模型编译、带 id 的图约、执行回执、独立验证和参数完整的结果冻结；M1 的规则
+与人工阻断仍保留。详情见 [可执行教程](../../examples/user_walkthrough/README.md)。
+以下含 `<ROOT>` 等占位符的命令为**接口示意**，需要换成你的真实路径和产物。
+
 ## 装好,然后确认环境
 
 ```bash
@@ -147,6 +168,18 @@ python scripts/harness.py status --project <ROOT> --json
 **这是设计要它发生的,不是要你去绕的 bug。**
 
 ## 看着它跑
+
+按小问查看实际证据（把路径替换为你的项目）：
+
+```powershell
+harness questions --project 'D:\比赛项目' --question q2 --json
+```
+
+`question_id` 必须由已编译的模型契约明确声明。工作台分别显示任务、模型、
+执行产物、验证义务、写作证据和实际 TeX 定位；缺少 writer package 或结果登记时
+仍是未验证，不等于论文已经可交。作者源改变后先重新编译，再重跑对应验证。
+控制台可读取作者源和回执日志、核对待审摘要、复制完整 PowerShell/bash 命令。
+修正仍通过作者文件与现有 producer 完成，刷新页面会重新计算事实。
 
 ```bash
 python dashboard/server.py --project <ROOT> --port 8765

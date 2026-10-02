@@ -57,6 +57,7 @@ from precedents.select_reference_cards import select_cards  # noqa: E402
 from qa.plan_selective_rerun import plan_selective_rerun  # noqa: E402
 from qa.paper_audit import audit_paper  # noqa: E402
 from doctor_core import STAGES as DOCTOR_STAGES, evaluate_capabilities, format_capability_report  # noqa: E402
+from views.question_workbench import question_workbench  # noqa: E402
 from gate_order import GATE_ORDER  # noqa: E402
 
 
@@ -1097,6 +1098,19 @@ def _setup(args: argparse.Namespace) -> int:
     return 0
 
 
+def _questions(args: argparse.Namespace) -> int:
+    report = question_workbench(_project(args))
+    if args.question:
+        report["questions"] = [row for row in report["questions"] if row["question_id"] == args.question]
+        if not report["questions"]:
+            report["ok"] = False
+            report["errors"].append(f"question is not declared: {args.question}")
+    lines = [f"{row['question_id']}: {row['task']}\n  验证: " + ", ".join(f"{item['obligation_id']}={item['status']}" for item in row["validation_obligations"]) + f"\n  论文证据: {row['writer_eligibility']}" for row in report["questions"]]
+    lines.extend(str(error) for error in report["errors"])
+    _emit(report, machine=args.json, human="\n".join(lines) or "尚无已声明的小问；先编译模型契约。")
+    return 0 if report["ok"] else 1
+
+
 def _add_common(parser: argparse.ArgumentParser, *, machine: bool = True) -> None:
     parser.add_argument("--project", default=".", help="project root")
     if machine:
@@ -1505,6 +1519,10 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--offline", action="store_true", help="reserved compatibility flag; does not download anything")
     doctor.add_argument("--verbose", action="store_true", help="show missing capabilities for later stages and optional routes")
     doctor.add_argument("--stage", choices=DOCTOR_STAGES, help="report only the capabilities required by one workflow stage")
+    questions = sub.add_parser("questions", help="read declared question tasks, validation evidence and paper locations")
+    _add_common(questions)
+    questions.add_argument("--question", help="filter an explicitly declared question id, such as q2")
+    questions.set_defaults(handler=_questions)
     doctor.set_defaults(handler=_doctor)
 
     setup = sub.add_parser("setup", help="render one draft-only DSH setup card")

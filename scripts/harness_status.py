@@ -408,6 +408,12 @@ def _v2_status(state: Any, *, ruleset: Mapping[str, Any] | None = None) -> dict[
         state, first_blocked=first_blocked, gate_reports=gate_reports,
         pending=pending, review=review,
     )
+    from views.question_workbench import question_workbench
+
+    try:
+        workbench = question_workbench(state.root)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        workbench = {"ok": False, "questions": [], "errors": [str(exc)], "read_only": True}
     return {
         "ok": True,
         "schema_version": "2.0",
@@ -435,6 +441,7 @@ def _v2_status(state: Any, *, ruleset: Mapping[str, Any] | None = None) -> dict[
         "stale_artifacts": dag["stale_artifacts"],
         "review": review,
         "readiness_diagnostics": diagnostics,
+        "question_workbench": workbench,
         "failures_summary": _failures_summary(gate_reports, pending, receipts, dag, review),
         "next_action": _next_action(first_blocked, pending, dag["stale_artifacts"], review),
         "generated_at": datetime.now(timezone.utc).isoformat(),

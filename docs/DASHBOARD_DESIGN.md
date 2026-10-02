@@ -33,10 +33,42 @@ separately. A current seed profile is not a verified competition rule set.
 ```text
 GET /                         static UI
 GET /api/snapshot             recomputed MCP state + artifact list + recorded trace
+GET /api/source?id=SOURCE_ID   bounded named author source, log or reviewed version
 GET /api/artifact?id=ID        actual registered in-root artifact bytes
 GET /api/artifact?id=ID&download=1   attachment
 POST /*                       405
 ```
+
+## Action and question workflow
+
+Diagnostics retain their exact text and add a Chinese corrective explanation.
+An explicit contract role identifies its authoring source; no field pointer is
+guessed. The inspector copies complete PowerShell/bash recheck commands or a
+producer compile command. Producers run through the existing CLI; the browser
+does not approve, edit, compile or execute a project.
+
+The named source catalog includes authoring YAML, reasoning Markdown, statically
+included TeX, receipt stdout/stderr and reviewed artifact references. Paths must
+resolve inside the project. Previews redact sensitive text and read at most
+128 KiB; logs show their tail. Reviewed bytes are shown only when their recorded
+digest matches. Missing historical bytes are reported, not reconstructed from
+the current file. Binary sources retain version metadata and use the artifact
+preview where registered. Source catalog errors appear as errors in the page.
+
+The question workbench is the same read-only projection as `harness questions`.
+It joins explicit question/model/claim/argument-unit ids; filenames never supply
+missing links. It separates executed outputs, recomputed validation obligations,
+registered frozen results and bound writer claims. Changed model sources or
+measurement bindings invalidate displayed validation. A current writer package
+is evidence availability, not Gate approval or mathematical/writing quality.
+TeX locators report missing, unique or ambiguous source-file/line matches;
+source/PDF binding comes from the existing paper audit, without inferred PDF pages.
+
+Run `tests/dashboard_workflow_browser.cjs` against a retained public tutorial
+project for source/log/question interaction checks. The existing
+`tests/dashboard_browser.cjs` covers navigation, themes, errors and artifact search
+against a freshly initialized disposable project. Screenshots belong outside
+the repository; they are UI verification, not competition evidence.
 
 State comes from `get_run_state`; artifact identity and freshness come from
 `list_artifacts`. Trace records come from the run index, receipts, reviews and
