@@ -128,6 +128,19 @@ class DashboardTest(unittest.TestCase):
                 self.assertEqual(response.headers["Content-Type"], "application/octet-stream")
                 self.assertEqual(response.headers["Content-Disposition"], "attachment")
 
+    def test_author_source_is_readable_by_named_identity_only(self) -> None:
+        source = self.project / ".harness/authoring/model_contract.yaml"
+        payload = json.loads(self.get("/api/source?id=authoring%3Amodel_contract")[1])
+        self.assertEqual(payload["text"], source.read_bytes().decode("utf-8"))
+        self.assertEqual(payload["kind"], "authoring")
+        for identifier, expected in [("../../secret", 404), ("escape", 403)]:
+            rows = [{"source_id": "escape", "path": "../outside.txt", "kind": "log", "freshness": "unknown"}]
+            with self.subTest(identifier=identifier), patch("workflow_sources.source_catalog", return_value=rows):
+                with self.assertRaises(urllib.error.HTTPError) as raised:
+                    self.get("/api/source?id=" + identifier)
+                self.assertEqual(raised.exception.code, expected)
+                raised.exception.close()
+
     def test_serving_never_mutates_the_project(self) -> None:
         before = _tree_digest(self.project)
         self.get("/api/snapshot")

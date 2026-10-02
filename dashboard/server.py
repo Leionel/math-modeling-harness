@@ -33,6 +33,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import mcp_server  # noqa: E402
 from project_layout import resolve_control_path  # noqa: E402
+from workflow_sources import source_catalog, read_source  # noqa: E402
 
 ALLOWED_ROOTS_ENV = "DASHBOARD_ALLOWED_ROOTS"
 GATE_ORDER = ("S0", "M1", "P1", "P2", "W1", "W2", "S1", "F1")
@@ -78,6 +79,8 @@ def _receipts(root: Path) -> list[dict[str, Any]]:
 def _reviews(root: Path) -> list[dict[str, Any]]:
     rows = []
     for path in sorted((root / "reports" / "review").glob("*.json")):
+        if not mcp_server.is_within(path.resolve(), root.resolve()):
+            continue
         report = _read_json(path)
         if "perspective" not in report:
             continue
@@ -152,6 +155,12 @@ def snapshot(root: Path) -> dict[str, Any]:
     blocked = str(state.get("first_blocked_gate") or "").lower()
     receipts = _receipts(root)
     reviews = _reviews(root)
+    try:
+        user_sources = source_catalog(root)
+        source_errors = []
+    except (OSError, ValueError, TypeError) as exc:
+        user_sources = []
+        source_errors = [str(exc)]
     manifest = _read_json(resolve_control_path(root, "run_manifest.json"))
     control = manifest.get("control") if isinstance(manifest.get("control"), dict) else {}
     mode_history = [row for row in control.get("operator_mode_history", []) if isinstance(row, dict)]
@@ -178,6 +187,7 @@ def snapshot(root: Path) -> dict[str, Any]:
         "status_errors": state.get("errors") or [],
         "status_exit_code": state.get("status_exit_code"),
         "next_action": state.get("next_action"),
+        "question_workbench": state.get("question_workbench"),
         "first_blocked_gate": state.get("first_blocked_gate"),
         "gates": [
             {
@@ -213,6 +223,8 @@ def snapshot(root: Path) -> dict[str, Any]:
             "run_index.json + receipts/*.json", "reports/review/*.json", "run_manifest.json",
         ],
         "read_only": True,
+        "user_sources": user_sources,
+        "source_errors": source_errors,
     }
 
 
@@ -232,6 +244,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler protocol
         route = urlsplit(self.path)
+        if route.path == "/api/source":
+            try:
+                _narrow_mcp_roots(self.root.resolve())
+                identifier = parse_qs(route.query).get("id", [""])[0]
+                self._json(200, read_source(self.root, identifier))
+            except (KeyError, FileNotFoundError) as exc:
+                self._json(404, {"error": str(exc)})
+            except (ValueError, RuntimeError, mcp_server.ToolCallError) as exc:
+                self._json(403, {"error": str(exc)})
+            except OSError as exc:
+                self._json(500, {"error": str(exc)})
+            return
         if self.path in ("/", "/index.html"):
             self._send(200, (DASHBOARD_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
             return

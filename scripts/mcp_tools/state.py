@@ -19,6 +19,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from gate_order import GATE_ORDER as _GATE_ORDER  # noqa: E402
+from workflow_sources import action_details  # noqa: E402
 
 
 def _harness_json(module: Mapping[str, Any], argv: list[str], root: Path) -> tuple[dict[str, Any], int]:
@@ -47,6 +48,7 @@ def get_run_state(root: Path, arguments: Mapping[str, Any], module: Mapping[str,
             "gate": str(row.get("id") or ""),
             "message": str(row.get("message")),
             "next_action": str(row.get("next_action")),
+            "action": action_details(root, str(row.get("id") or ""), str(row.get("message") or "")),
         }
         for row in (payload.get("failures_summary") or {}).get("items", [])
         if isinstance(row, Mapping) and row.get("source") == "gate"
@@ -92,6 +94,7 @@ def get_run_state(root: Path, arguments: Mapping[str, Any], module: Mapping[str,
         "status_exit_code": exit_code,
         "errors": errors,
         "next_action": payload.get("next_action"),
+        "question_workbench": payload.get("question_workbench"),
     }
 
 

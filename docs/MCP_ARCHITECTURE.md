@@ -37,6 +37,12 @@ deterministic entry point the CLI calls, so an MCP answer and a
 `harness check` answer cannot drift apart. If they ever disagree, that is a bug
 in this layer, not a policy choice.
 
+`get_run_state` also forwards the read-only `question_workbench` from status.
+Blockers carry `action` with exact diagnostics, a Chinese explanation, explicit
+author-source identity where available, and argv plus PowerShell/POSIX display
+commands. A missing field locator remains null. These are planning aids, not
+new MCP tools, mutation authority or additional Gate verdicts.
+
 ## Tool surface
 
 Read-only by default:
