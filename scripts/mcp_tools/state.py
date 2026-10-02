@@ -29,6 +29,8 @@ def _harness_json(module: Mapping[str, Any], argv: list[str], root: Path) -> tup
         payload = json.loads(stdout)
     except json.JSONDecodeError:
         payload = {"ok": False, "errors": [stdout or "harness returned no JSON"]}
+    if not isinstance(payload, dict):
+        payload = {"ok": False, "errors": ["harness JSON must be an object"]}
     return payload, exit_code
 
 
@@ -42,12 +44,12 @@ def get_run_state(root: Path, arguments: Mapping[str, Any], module: Mapping[str,
     gates = payload.get("gates") or {}
     blockers = [
         {
-            "gate": str(row.get("id")),
+            "gate": str(row.get("id") or ""),
             "message": str(row.get("message")),
             "next_action": str(row.get("next_action")),
         }
         for row in (payload.get("failures_summary") or {}).get("items", [])
-        if isinstance(row, Mapping)
+        if isinstance(row, Mapping) and row.get("source") == "gate"
     ]
     # Callers act on these as stage names ("a human must confirm w1"), so a
     # projected row is rendered as its stage rather than as a Python repr.
@@ -57,7 +59,15 @@ def get_run_state(root: Path, arguments: Mapping[str, Any], module: Mapping[str,
     ]
     stale = [str(row) for row in payload.get("stale_artifacts") or []]
     stage = str(payload.get("stage") or "")
-    if blocked:
+    errors = [str(error) for error in payload.get("errors") or []]
+    if exit_code != 0 or payload.get("ok") is not True:
+        gate_status = "ERROR"
+        errors = errors or [f"status unavailable (exit code {exit_code})"]
+        next_actions = [str(payload.get("next_action") or "repair the status source and rerun harness status")]
+    elif payload.get("deprecated"):
+        gate_status = "LEGACY"
+        next_actions = [str(payload.get("deprecation"))]
+    elif blocked:
         next_actions = [row["next_action"] for row in blockers if row["gate"] == str(blocked)][:5]
         gate_status = "BLOCKED"
     elif pending:
@@ -80,6 +90,8 @@ def get_run_state(root: Path, arguments: Mapping[str, Any], module: Mapping[str,
         "next_actions": [row for row in next_actions if row],
         "source": "harness status --json (recomputed; no cached Gate state)",
         "status_exit_code": exit_code,
+        "errors": errors,
+        "next_action": payload.get("next_action"),
     }
 
 

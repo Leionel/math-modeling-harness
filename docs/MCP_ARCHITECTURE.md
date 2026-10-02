@@ -101,3 +101,13 @@ Add a handler in the right `scripts/mcp_tools/` module with
 3. Never accept a command, path or script from tool arguments that the operator
    has not configured server-side.
 4. `harness agents check` and `tests/test_mcp_server.py` must both stay green.
+# Status projection outcomes
+
+`get_run_state` reports `ERROR` when the status process fails, emits non-object
+JSON, or reports `ok: false`. Its `errors` and `status_exit_code` preserve the
+failure; it cannot infer READY from an empty response. Deprecated v1 status is
+`LEGACY`, not a recomputed v2 readiness verdict. A valid v2 report may be
+`BLOCKED`, `PENDING_HUMAN`, or `READY`; these describe observed evidence, not
+mathematical correctness. Gate blockers retain their `failures_summary` gate
+identity. Current Gate work takes priority over future human checkpoints.
+

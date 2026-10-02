@@ -205,14 +205,14 @@ def _next_action(first_blocked: Any, pending: list[dict[str, Any]], stale: list[
     # The gate order keeps priority; review guidance is appended so an open
     # finding stays visible without outranking an earlier blocked gate.
     primary: str | None = None
-    if pending:
-        stage = pending[0].get("stage") or "required"
-        primary = f"human review pending on stage {str(stage).upper()}"
-    elif stale:
-        primary = "refresh or rerun stale artifacts, then recheck the first blocked Gate"
-    elif first_blocked:
+    if first_blocked:
         gate = first_blocked[0] if isinstance(first_blocked, (tuple, list)) else first_blocked
         primary = f"produce the missing evidence for {str(gate).upper()} and rerun `harness check {str(gate).upper()}`"
+    elif stale:
+        primary = "refresh or rerun stale artifacts, then recheck the first blocked Gate"
+    elif pending:
+        stage = pending[0].get("stage") or "required"
+        primary = f"human review pending on stage {str(stage).upper()}"
     suffix = ""
     if isinstance(review, dict):
         blocked_name = first_blocked[0] if isinstance(first_blocked, (tuple, list)) else first_blocked
