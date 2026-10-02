@@ -47,3 +47,23 @@
 
 全量验证须在最终固定 HEAD 上执行；期间不得提交，以免 benchmark 的 revision
 绑定断言受污染。最终通过/失败数量以本次运行输出和交付报告为准。
+
+## 最终验证记录
+
+代码验证版本：`95f2070`。全量运行期间 HEAD 保持固定；后续提交仅补本文记录。
+
+| 验证 | 实际结果 |
+| --- | --- |
+| `python -m unittest discover -s tests -q` | 908 项，907 通过、1 跳过；1260.518 秒 |
+| `python evaluation/redteam.py --output <临时报告>` | ok=true，13 个场景符合预期；保留既有 documented gaps |
+| `python scripts/harness.py agents check --json` | ok=true，7 个 agent 契约 |
+| Ruff（本轮改动 Python 及相关测试） | All checks passed |
+| 两组 Edge/Playwright 页面回归 | 导航/成果/错误状态，以及实际 Q2/源文件/日志/命令复制/窄屏均通过 |
+| PowerShell 与 Windows Git Bash 教程 | 实际求解、检验、冻结完成；正式 M1 保持阻断 |
+| 最终 HEAD 的 `git archive` 导出教程 | Windows 上成功，验证 Git blob 字节；不替代 Linux |
+| 凭据模式扫描与 `git diff --check` | 27 个本轮跟踪文件无所查凭据模式命中；diff 检查通过 |
+
+本机完整日志：`%TEMP%\harness-full-final-20261002.log`；红队报告：
+`%TEMP%\harness-redteam-final-20261002.json`。最终归档教程日志位于
+`%TEMP%\harness-final-archive-822205feaf154778aed480524a599ea1\tutorial.log`。
+本轮不含 Linux 实测或陌生用户易用性测试；没有推送远端。
