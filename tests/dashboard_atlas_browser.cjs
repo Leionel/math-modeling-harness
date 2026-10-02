@@ -78,6 +78,10 @@ const path = require("node:path");
       scale: "css",
     });
     await page.locator("#theme").click();
+    await page.waitForFunction(() => {
+      const style = getComputedStyle(document.getElementById("refresh"));
+      return style.backgroundColor === "rgb(27, 34, 45)";
+    });
     await page.screenshot({
       path: path.join(output, "outcomes-dark.png"),
       scale: "css",
