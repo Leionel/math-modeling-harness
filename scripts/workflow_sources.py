@@ -68,6 +68,8 @@ def source_catalog(root: Path) -> list[dict[str, Any]]:
     for role, spec in AUTHORING_SPECS.items():
         add(f"authoring:{role}", indexed.get(role) or spec["source"], "authoring")
         add(f"reasoning:{role}", spec["legacy_source"], "reasoning")
+    for brief in sorted((root / "figures").glob("*/brief.md")):
+        add(f"figure:{brief.parent.name}:brief", str(brief), "figure_brief")
     tex = root / "paper/main.tex"
     if tex.is_file():
         for path in load_tex_source(tex, root).files:

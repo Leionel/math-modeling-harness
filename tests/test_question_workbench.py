@@ -66,6 +66,7 @@ class QuestionWorkbenchTest(unittest.TestCase):
         self.assertEqual(row["question_id"], "q2")
         self.assertEqual(row["validation_obligations"][0]["status"], "PASS")
         self.assertEqual(row["executed_outputs"][0]["path"], "raw_results.json")
+        self.assertEqual(row["executed_outputs"][0]["result"]["value"], 0)
         self.assertEqual(row["writer_eligibility"], "unverified")
         self.assertEqual(row["writer_claims"], [])
         missing = subprocess.run(
@@ -105,6 +106,14 @@ class QuestionWorkbenchTest(unittest.TestCase):
         self.assertEqual(
             report["questions"][0]["validation_obligations"][0]["status"], "unknown"
         )
+
+    def test_changed_result_is_not_shown_as_receipt_bound_value(self):
+        path = self.project / "raw_results.json"
+        value = json.loads(path.read_text(encoding="utf-8"))
+        value["results"][0]["value"] = 999
+        path.write_text(json.dumps(value), encoding="utf-8")
+        row = question_workbench(self.project)["questions"][0]
+        self.assertIsNone(row["executed_outputs"][0]["result"])
 
     def test_explicit_shared_model_and_nested_tex_locations(self):
         manifest_path = self.project / "run_manifest.json"

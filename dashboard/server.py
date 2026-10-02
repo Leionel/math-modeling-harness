@@ -34,6 +34,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import mcp_server  # noqa: E402
 from project_layout import resolve_control_path  # noqa: E402
 from workflow_sources import source_catalog, read_source  # noqa: E402
+from views.question_assets import figure_catalog, PREVIEW_TYPES  # noqa: E402
 
 ALLOWED_ROOTS_ENV = "DASHBOARD_ALLOWED_ROOTS"
 GATE_ORDER = ("S0", "M1", "P1", "P2", "W1", "W2", "S1", "F1")
@@ -151,6 +152,12 @@ def snapshot(root: Path) -> dict[str, Any]:
     _narrow_mcp_roots(root.resolve())
     state = _tool(root, "get_run_state")
     artifacts = _tool(root, "list_artifacts")
+    try:
+        figures = figure_catalog(root, artifacts.get("artifacts") or [])
+        figure_errors = []
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        figures = []
+        figure_errors = [str(exc)]
     gates = [str(name).lower() for name in (state.get("gates_passed") or [])]
     blocked = str(state.get("first_blocked_gate") or "").lower()
     receipts = _receipts(root)
@@ -224,6 +231,8 @@ def snapshot(root: Path) -> dict[str, Any]:
         ],
         "read_only": True,
         "user_sources": user_sources,
+        "figures": figures,
+        "figure_errors": figure_errors,
         "source_errors": source_errors,
     }
 
@@ -244,6 +253,38 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler protocol
         route = urlsplit(self.path)
+        if route.path == "/api/figure":
+            try:
+                _narrow_mcp_roots(self.root.resolve())
+                params = parse_qs(route.query)
+                identifier = params.get("id", [""])[0]
+                figures = figure_catalog(self.root)
+                figure = next((row for row in figures if row["figure_id"] == identifier), None)
+                index = int(params.get("file", ["0"])[0])
+                if figure is None or index < 0 or index >= len(figure["previews"]):
+                    self._json(404, {"error": "figure preview is not declared"})
+                    return
+                path = (self.root / figure["previews"][index]["path"]).resolve()
+                if not path.is_relative_to(self.root.resolve()):
+                    raise ValueError("figure preview escapes project")
+                if not path.is_file():
+                    self._json(404, {"error": "declared figure has not been produced"})
+                    return
+                body = path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", PREVIEW_TYPES.get(path.suffix.lower(), "application/octet-stream"))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Security-Policy", "sandbox")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Disposition", "inline" if path.suffix.lower() in PREVIEW_TYPES and "download" not in params else "attachment")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (ValueError, TypeError, mcp_server.ToolCallError, RuntimeError) as exc:
+                self._json(403, {"error": str(exc)})
+            except OSError as exc:
+                self._json(500, {"error": str(exc)})
+            return
         if route.path == "/api/source":
             try:
                 _narrow_mcp_roots(self.root.resolve())
@@ -258,6 +299,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path in ("/", "/index.html"):
             self._send(200, (DASHBOARD_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
+            return
+        if route.path == "/outcomes.js":
+            self._send(200, (DASHBOARD_DIR / "outcomes.js").read_bytes(), "text/javascript; charset=utf-8")
             return
         if route.path == "/api/artifact":
             wanted = parse_qs(route.query).get("id", [""])[0]

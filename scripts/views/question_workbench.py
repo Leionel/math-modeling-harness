@@ -124,6 +124,7 @@ def question_workbench(root: Path) -> dict[str, Any]:
                                 "selected": receipt["receipt_id"] in selected,
                                 "freshness": "current" if current else "unverified",
                                 "exit_code": receipt.get("exit_code"),
+                                "result": result if current else None,
                             }
                         )
     package_errors = []
