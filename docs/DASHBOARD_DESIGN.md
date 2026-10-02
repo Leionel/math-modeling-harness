@@ -107,7 +107,8 @@ actor identity remains self-declared; see `THREAT_MODEL.md`.
 
 Question-level deliverable summaries require explicit problem/model/validation/
 paper links. This iteration does not guess these from filenames or create new
-claim evidence. Unregistered PDFs or figures are intentionally absent. Artifact
+claim evidence. The artifact ledger lists registered evidence; the question atlas
+also previews explicit paper-plan references, labelled as unregistered. Artifact
 freshness alone proves neither mathematical correctness nor acceptance. Browser
 automation is not an unfamiliar-user usability study.
 
@@ -127,3 +128,44 @@ an installed Edge browser. It covers navigation, inspector, search, filters,
 clipboard, theme/language cycles, pause, narrow-screen overflow, connection
 failure and status ERROR. Synthetic failures are test inputs, never project
 evidence. Screenshots need separate visual inspection.
+
+## Question outcomes atlas
+
+The Question outcomes page starts with a question switch and three views: figures,
+results and validation. The sidebar uses a slate-blue surface; the content area
+uses spacious white cards, a result table and a two-column figure gallery. Themes,
+keyboard focus and narrow-screen layouts remain available.
+
+Figure membership comes from `paper_plan.json` figure claim IDs and claim question
+IDs, including explicit argument-unit scopes. A brief without those links appears
+under Unlinked; filenames never establish question membership. Select a figure to
+open its brief, inspect its provenance, download it or preview an actual raster/PDF.
+SVG is download-only. `/api/figure?id=<FIGURE_ID>&file=<INDEX>` serves only named,
+contained project files from this catalog, never arbitrary paths.
+
+Result rows show actual receipt-bound JSON values (including zero), units,
+statistical definitions, boundaries and sources. Modified/unbound result files
+lose their displayed values. Model-source changes mark historical outputs.
+Exploratory results and writer-package references have separate labels; neither
+the table nor a thumbnail grants paper eligibility or a Gate PASS.
+
+For an illustration with a complete brief, the inspector displays and copies the
+full prompt produced by the existing illustration producer. Changed briefs are
+labelled as drafts/stale requests. Data figures must be plotted from data and do
+not receive image-generation prompts. The expandable handoff shows full request
+and collection commands. Only after confirming contest AI policy and actual tool
+availability should the user record a request, generate externally, save the image
+and collect it. Collection still requires disclosure and the existing scientific,
+visual and final-size reviews. The dashboard itself never generates or approves.
+
+Reproduce the UI fixture and start a local preview (the fixture prints its root):
+
+```powershell
+python tests/_dashboard_atlas_fixture.py
+python dashboard/server.py --project '<printed project root>' --port 8771
+```
+
+`tests/dashboard_atlas_browser.cjs` covers actual numerical output, question and
+view filters, real image previews, full prompt clipboard content, data-figure
+routing, dark theme and mobile overflow. This is a disposable teaching fixture,
+not evidence of a completed competition project.

@@ -7,13 +7,13 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: #fafafa;
+        --bg: #edf3f8;
         --panel: #fff;
-        --soft: #f3f5f8;
-        --ink: #202938;
-        --muted: #647083;
-        --line: #e3e7ed;
-        --blue: #2563eb;
+        --soft: #f0f5f9;
+        --ink: #102a43;
+        --muted: #587084;
+        --line: #dce6ee;
+        --blue: #1c658c;
         --green: #17734d;
         --red: #b73737;
         --amber: #91620c;
@@ -39,7 +39,7 @@
         background: var(--bg);
         color: var(--ink);
         font:
-          14px/1.65 "Segoe UI Variable",
+          14px/1.7 "Segoe UI Variable",
           "Segoe UI",
           "Microsoft YaHei",
           sans-serif;
@@ -72,7 +72,8 @@
       code,
       pre {
         font:
-          12px/1.65 Consolas,
+          12px/1.65 "Cascadia Mono",
+          Consolas,
           monospace;
         overflow-wrap: anywhere;
       }
@@ -85,7 +86,7 @@
         margin: 0;
       }
       h1 {
-        font-size: 26px;
+        font-size: 32px;
         line-height: 1.4;
         font-weight: 650;
       }
@@ -100,11 +101,12 @@
       }
       .shell {
         display: grid;
-        grid-template-columns: 208px minmax(0, 1fr);
+        grid-template-columns: 224px minmax(0, 1fr);
         min-height: 100vh;
       }
       .sidebar {
-        background: var(--panel);
+        background: #16384c;
+        color: #e9f2f8;
         border-right: 1px solid var(--line);
         padding: 28px 18px;
         position: sticky;
@@ -123,7 +125,7 @@
         font-weight: 400;
         font-size: 11px;
         letter-spacing: 1.5px;
-        color: var(--muted);
+        color: #a9c4d5;
       }
       #project {
         font-size: 12px;
@@ -134,13 +136,16 @@
         gap: 6px;
       }
       .nav button {
+        color: #c8dce8;
+        background: transparent;
         text-align: left;
         border-color: transparent;
         padding: 11px 14px;
       }
       .nav button[aria-current="page"] {
-        color: var(--blue);
-        background: var(--soft);
+        color: #fff;
+        background: #284f66;
+        box-shadow: inset 3px 0 #87d4d2;
         font-weight: 600;
       }
       .sidebar footer {
@@ -163,7 +168,7 @@
       }
       .workspace {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 300px;
+        grid-template-columns: minmax(0, 1fr) 330px;
         gap: 26px;
         padding: 32px;
         max-width: 1600px;
@@ -396,6 +401,221 @@
       #content {
         overflow-wrap: anywhere;
       }
+      .sidebar footer {
+        color: #a9c4d5;
+      }
+      .brand {
+        letter-spacing: 0.04em;
+        font-size: 20px;
+      }
+      .brand small {
+        margin-top: 7px;
+        color: #a9c4d5;
+      }
+      .topbar {
+        min-height: 78px;
+        background: var(--bg);
+        border-bottom-color: var(--line);
+      }
+      .page-head {
+        padding-bottom: 22px;
+        border-bottom: 1px solid var(--line);
+      }
+      .eyebrow {
+        letter-spacing: 0.05em;
+        font:
+          11px/1.7 "Cascadia Mono",
+          Consolas,
+          monospace;
+      }
+      .action,
+      .rows,
+      .card,
+      .preview {
+        border-radius: 14px;
+        box-shadow: 0 5px 20px #102a4305;
+      }
+      .row {
+        padding: 20px;
+      }
+      .row:hover,
+      .nav button:hover {
+        transform: translateY(-1px);
+      }
+      button {
+        transition:
+          background 0.15s,
+          transform 0.15s;
+      }
+      .inspector {
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        align-self: start;
+      }
+      .question-switch {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 24px 0 20px;
+      }
+      .question-switch button {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        background: var(--panel);
+        border-radius: 12px;
+      }
+      .question-switch b {
+        font:
+          700 23px/1.2 "Cascadia Mono",
+          Consolas,
+          monospace;
+      }
+      .question-switch button[aria-pressed="true"] {
+        border-color: var(--blue);
+        box-shadow: inset 0 -3px var(--blue);
+      }
+      .outcome-tabs {
+        display: flex;
+        gap: 24px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 24px;
+        overflow-x: auto;
+      }
+      .outcome-tabs button {
+        background: transparent;
+        border: 0;
+        padding: 12px 0;
+        border-radius: 0;
+        white-space: nowrap;
+      }
+      .outcome-tabs button[aria-pressed="true"] {
+        color: var(--blue);
+        box-shadow: inset 0 -2px var(--blue);
+        font-weight: 650;
+      }
+      .atlas {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .figure-tile {
+        padding: 0;
+        overflow: hidden;
+        border-radius: 14px;
+        text-align: left;
+        background: var(--panel);
+        min-width: 0;
+      }
+      .figure-sheet {
+        aspect-ratio: 4/3;
+        display: grid;
+        place-items: center;
+        background: var(--soft);
+        border-bottom: 1px solid var(--line);
+        padding: 20px;
+      }
+      .figure-sheet img {
+        width: 100%;
+        height: 100%;
+        max-height: 260px;
+        object-fit: contain;
+      }
+      .figure-sheet .empty-figure {
+        text-align: center;
+        color: var(--muted);
+      }
+      .figure-sheet .empty-figure strong {
+        display: block;
+        font-size: 20px;
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+      .figure-copy {
+        padding: 18px;
+      }
+      .figure-copy .badge {
+        margin-right: 6px;
+        margin-bottom: 9px;
+      }
+      .figure-copy h2 {
+        margin-bottom: 8px;
+      }
+      .result-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+      }
+      .result-table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 540px;
+        text-align: left;
+      }
+      .result-table th {
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .result-table th,
+      .result-table td {
+        padding: 15px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      .result-table .number {
+        font:
+          650 20px/1.4 "Cascadia Mono",
+          Consolas,
+          monospace;
+      }
+      .prompt-panel {
+        padding: 18px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 18px 0;
+      }
+      .prompt-panel pre {
+        max-height: 480px;
+        overflow: auto;
+      }
+      .gallery-large {
+        padding: 20px;
+        margin-top: 24px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+      .gallery-large img {
+        width: 100%;
+        max-height: 720px;
+        object-fit: contain;
+      }
+      .gallery-large iframe {
+        width: 100%;
+        height: 600px;
+        border: 0;
+      }
+      .outcome-note {
+        border-left: 3px solid #117b73;
+        padding: 12px 16px;
+        background: var(--soft);
+        margin: 18px 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        button {
+          transition: none;
+        }
+        .row:hover,
+        .nav button:hover {
+          transform: none;
+        }
+      }
       @media (max-width: 1150px) {
         .workspace {
           grid-template-columns: minmax(0, 1fr);
@@ -462,6 +682,12 @@
         .preview iframe {
           height: 400px;
         }
+        .atlas {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .inspector {
+          padding: 18px;
+        }
       }
     </style>
   </head>
@@ -492,6 +718,7 @@
         </div>
       </div>
     </div>
+    <script src="/outcomes.js"></script>
     <script>
       const $ = (id) => document.getElementById(id),
         esc = (v) =>
@@ -513,6 +740,8 @@
         selection = null,
         filter = "all",
         query = "",
+        questionFilter = "all",
+        outcomeTab = "all",
         paused = false,
         busy = false,
         lastFetch = null,
@@ -526,6 +755,7 @@
       const words = {
         overview: ["概览", "Overview"],
         model: ["题目与模型", "Problem & models"],
+        outcomes: ["每问成果", "Question outcomes"],
         runs: ["实验与验证", "Runs & reviews"],
         paper: ["论文与图表", "Paper & figures"],
         results: ["成果中心", "Deliverables"],
@@ -537,13 +767,25 @@
         locked: ["尚未检查", "Not evaluated"],
         unknown: ["未知", "Unknown"],
         unverified: ["未验证", "Unverified"],
-        current_package: ["当前写作包已绑定（不代表论文质量通过）", "Current bound writer package"],
+        current_package: [
+          "当前写作包已绑定（不代表论文质量通过）",
+          "Current bound writer package",
+        ],
         matched: ["已定位", "Located"],
         missing: ["缺失", "Missing"],
         ambiguous: ["多处匹配，需核对", "Multiple matches"],
-        "no registered writer package": ["尚未登记写作证据包", "no registered writer package"],
-        "no registered claimable PASS frozen results": ["尚未登记可供写作的冻结结果", "no registered claimable PASS frozen results"],
-        "model authoring source changed": ["模型作者源已改变，需要重新编译并验证", "model authoring source changed"],
+        "no registered writer package": [
+          "尚未登记写作证据包",
+          "no registered writer package",
+        ],
+        "no registered claimable PASS frozen results": [
+          "尚未登记可供写作的冻结结果",
+          "no registered claimable PASS frozen results",
+        ],
+        "model authoring source changed": [
+          "模型作者源已改变，需要重新编译并验证",
+          "model authoring source changed",
+        ],
         boundary: ["流程边界", "Boundary"],
         current: ["当前版本", "Current"],
         stale: ["已过期", "Stale"],
@@ -623,7 +865,10 @@
               ? tr("最近重算 ", "Recomputed ") +
                 new Date(lastFetch).toLocaleTimeString()
               : tr("读取中…", "Loading…");
-        $("project").textContent = data?.project_root || "";
+        const projectPath = data?.project_root || "";
+        $("project").textContent =
+          projectPath.split(/[\\/]/).filter(Boolean).pop() || "";
+        $("project").title = projectPath;
       }
       function head(title, sub) {
         return `<div class="page-head"><div class="eyebrow">${esc(data.run_id || "—")} · ${esc(word(data.gate_status))}</div><h1>${title}</h1><p class="muted" style="margin-top:10px">${sub}</p></div>`;
@@ -650,7 +895,11 @@
           $("error").innerHTML +=
             `<div class="error-banner">${esc(word(data.gate_status))}<br>${data.status_errors.map(esc).join("<br>")}</div>`;
         if (data.source_errors?.length)
-          $("error").innerHTML += `<div class="error-banner">${tr("源文件目录读取失败：", "Source catalog failed: ")}${data.source_errors.map(esc).join("<br>")}</div>`;
+          $("error").innerHTML +=
+            `<div class="error-banner">${tr("源文件目录读取失败：", "Source catalog failed: ")}${data.source_errors.map(esc).join("<br>")}</div>`;
+        if (data.figure_errors?.length)
+          $("error").innerHTML +=
+            `<div class="error-banner">${tr("图册读取失败：", "Figure catalog failed: ")}${data.figure_errors.map(esc).join("<br>")}</div>`;
         const arts = data.artifacts || [],
           blocked = String(data.first_blocked_gate || "").toUpperCase();
         if (view === "overview") {
@@ -685,6 +934,8 @@
               ),
             ) +
             `<div class="section-head"><h2>${tr("待人工确认", "Pending human decisions")}</h2></div><p class="muted">${esc((data.pending_human_checkpoints || []).join(" · ") || tr("暂无待确认项", "None reported"))}</p><p class="muted small">${tr("先处理当前 Gate 的证据诊断；后续人工确认不代表现在应批准。", "Resolve current gate evidence first. Later decisions are not instructions to approve now.")}</p>`;
+        } else if (view === "outcomes") {
+          renderOutcomes();
         } else if (view === "runs") {
           $("content").innerHTML =
             head(
@@ -829,9 +1080,19 @@
       }
       function inspect() {
         let selected = selection;
-        if (!selected && data.blockers?.length)
+        if (!selected && view === "outcomes") {
+          const question = data.question_workbench?.questions?.find(
+            (q) => q.question_id === questionFilter,
+          );
+          if (question)
+            selected = { kind: "question", id: question.question_id };
+        }
+        if (!selected && view !== "outcomes" && data.blockers?.length)
           selected = { kind: "issue", id: 0 };
-        let body = "",
+        let body =
+            view === "outcomes"
+              ? `<p class="muted">${tr("选择小问查看验证和写作边界；点击图卡查看大图与生图 prompt。", "Select a question for validation and writing boundaries, or a figure for preview and generation prompt.")}</p>`
+              : "",
           title = tr("工作详情", "Work details");
         if (selected?.kind === "issue") {
           const b = data.blockers?.[selected.id];
@@ -845,6 +1106,10 @@
           if (s) {
             body = `<p><code>${esc(s.path)}</code></p><p>${esc(word(s.freshness))}</p><div class="links"><button id="load-source">${tr("读取内容", "Read content")}</button><button data-copy="path">${tr("复制路径", "Copy path")}</button></div><p class="small muted">${tr("只读预览；日志有长度限制并做敏感信息遮盖。", "Read-only; logs are bounded and redacted.")}</p><div id="source-content"></div>`;
           }
+        } else if (selected?.kind === "figure") {
+          const figure = inspectFigure(selected.id);
+          title = figure.title;
+          body = figure.body;
         } else if (selected?.kind === "question") {
           const q = data.question_workbench?.questions?.find(
             (q) => q.question_id === selected.id,
@@ -960,8 +1225,17 @@
             copiedText = text;
             await navigator.clipboard.writeText(text);
             $("notice").textContent = tr(
-              "已复制" + (b.dataset.copy === "path" ? "文件路径" : b.dataset.copy === "posix" ? " bash 命令" : " PowerShell 命令"),
-              b.dataset.copy === "path" ? "File path copied" : b.dataset.copy === "posix" ? "bash command copied" : "PowerShell command copied",
+              "已复制" +
+                (b.dataset.copy === "path"
+                  ? "文件路径"
+                  : b.dataset.copy === "posix"
+                    ? " bash 命令"
+                    : " PowerShell 命令"),
+              b.dataset.copy === "path"
+                ? "File path copied"
+                : b.dataset.copy === "posix"
+                  ? "bash command copied"
+                  : "PowerShell command copied",
             );
           } catch {
             $("notice").textContent = copiedText || checkCommand();
