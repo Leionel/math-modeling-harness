@@ -201,3 +201,57 @@ class QuestionWorkbenchTest(unittest.TestCase):
         self.assertEqual(action["compile_command"]["effect"], "producer")
         self.assertTrue(action["command"]["powershell"])
         self.assertTrue(action["command"]["posix"])
+
+    def test_compile_action_preserves_custom_source_and_output(self):
+        from tests.test_p0_harness import P0HarnessTest
+
+        research_fixture = Path(self.temp.name) / "research-fixture"
+        research_fixture.mkdir()
+        paths = P0HarnessTest(methodName="runTest").build_fixture(research_fixture)
+        basis = json.loads(paths["model"].read_text(encoding="utf-8"))["research_basis"]
+        (self.project / "custom research.json").write_text(
+            json.dumps({"research_basis": basis}), encoding="utf-8"
+        )
+        source = self.project / "custom model.yaml"
+        shutil.copyfile(self.project / ".harness/authoring/model_contract.yaml", source)
+        command = [
+            sys.executable,
+            str(ROOT / "scripts/harness.py"),
+            "model",
+            "--project",
+            str(self.project),
+            "--compile",
+            "--source",
+            "custom model.yaml",
+            "--output",
+            "custom model.json",
+            "--research-source",
+            "custom research.json",
+            "--json",
+        ]
+        result = subprocess.run(
+            command, capture_output=True, text=True, encoding="utf-8"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        action = action_details(
+            self.project, "m1", "model_contract authoring source changed"
+        )
+        argv = action["compile_command"]["argv"]
+        self.assertEqual(action["target_path"], "custom model.yaml")
+        self.assertEqual(argv[argv.index("--source") + 1], "custom model.yaml")
+        self.assertEqual(argv[argv.index("--output") + 1], "custom model.json")
+        self.assertEqual(
+            argv[argv.index("--research-source") + 1], "custom research.json"
+        )
+        # The default YAML is deliberately broken: the copied command must use the indexed source.
+        (self.project / ".harness/authoring/model_contract.yaml").write_text(
+            "model_contract: invalid", encoding="utf-8"
+        )
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/harness.py"), *argv[1:]],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.project / "custom model.json").is_file())

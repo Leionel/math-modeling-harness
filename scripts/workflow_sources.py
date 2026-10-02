@@ -166,6 +166,7 @@ def action_details(root: Path, gate: str, message: str) -> dict[str, Any]:
         "--json",
     ]
     source = AUTHORING_SPECS[target]["source"] if target else None
+    entry = None
     if target:
         index = read_object(root, ".harness/authoring/compile_index.json")
         entry = next(
@@ -190,10 +191,26 @@ def action_details(root: Path, gate: str, message: str) -> dict[str, Any]:
             "--project",
             str(root.resolve()),
             "--compile",
+            "--source",
+            source,
         ]
         if target
         else None
     )
+    if compile_argv and entry:
+        output = (
+            project_file(root, entry["output_path"])
+            .relative_to(root.resolve())
+            .as_posix()
+        )
+        compile_argv.extend(["--output", output])
+        if target == "model_contract" and len(entry.get("sources", [])) > 1:
+            research = (
+                project_file(root, entry["sources"][1]["path"])
+                .relative_to(root.resolve())
+                .as_posix()
+            )
+            compile_argv.extend(["--research-source", research])
     return {
         "summary_zh": f"当前 {gate.upper()} 的{names[target]}证据需要处理"
         if target

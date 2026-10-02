@@ -12,6 +12,8 @@
   回执和摘要均由实际 producer 产生；正式 M1 仍阻断，人工 checkpoint 未代填。
 - 控制台提供中文诊断解释、目标作者源、完整双 shell 复查命令、producer 编译
   命令、日志尾部和待审版本摘要。没有字段定位依据时不猜字段。
+  编译命令保留当前索引的 source/output，以及模型的独立 research-source；
+  自定义作者路径不会被复制命令中的默认路径替换。
 - `harness questions`、status、既有 MCP get_run_state 与页面共用逐问投影。
   任务、明确关联的模型/执行产物、验证义务、冻结结果和写作资格分别展示。
   跨小问共享模型只采用 argument unit 明确声明的 model_ids。
